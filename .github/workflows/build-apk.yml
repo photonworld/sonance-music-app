@@ -44,30 +44,23 @@ jobs:
           EOF
           npm run build
 
-      - name: Setup Capacitor Android
+      - name: Setup Fresh Capacitor Android
         run: |
-          if [ ! -f "android/gradlew" ]; then
-            mkdir -p temp_android
-            cp -r android/* temp_android/ 2>/dev/null || true
-            rm -rf android
-            npm install @capacitor/core @capacitor/cli @capacitor/android --legacy-peer-deps --force
-            npx cap init "Sonance" "com.sonance.music" --web-dir=dist
-            npx cap add android
-            cp -rn temp_android/* android/ 2>/dev/null || true
-          fi
-          if ! grep -q "sonance_widget_description" android/app/src/main/res/values/strings.xml; then
+          mkdir -p backup_res
+          cp -r android/app/src/main/res/* backup_res/ 2>/dev/null || true
+          rm -rf android
+          npx cap add android
+          cp -rn backup_res/* android/app/src/main/res/ 2>/dev/null || true
+          if [ -f "android/app/src/main/res/values/strings.xml" ] && ! grep -q "sonance_widget_description" android/app/src/main/res/values/strings.xml; then
             sed -i 's|</resources>|    <string name="sonance_widget_description">Sonance Music Player Widget</string>\n</resources>|g' android/app/src/main/res/values/strings.xml
           fi
-          sed -i 's/com.android.tools.build:gradle:[0-9.]*/com.android.tools.build:gradle:8.9.1/g' android/build.gradle
-          sed -i 's/gradle-[0-9.]*-all.zip/gradle-8.11.1-all.zip/g' android/gradle/wrapper/gradle-wrapper.properties
-          sed -i 's/gradle-[0-9.]*-bin.zip/gradle-8.11.1-bin.zip/g' android/gradle/wrapper/gradle-wrapper.properties
           npx cap sync android
 
       - name: Build Debug APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --no-daemon --stacktrace=false || ./gradlew assembleDebug --no-daemon | tail -n 40
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
