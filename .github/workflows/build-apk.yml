@@ -58,14 +58,16 @@ jobs:
           if ! grep -q "sonance_widget_description" android/app/src/main/res/values/strings.xml; then
             sed -i 's|</resources>|    <string name="sonance_widget_description">Sonance Music Player Widget</string>\n</resources>|g' android/app/src/main/res/values/strings.xml
           fi
-          find android -name "*.gradle" -exec sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' {} +
+          sed -i 's/com.android.tools.build:gradle:[0-9.]*/com.android.tools.build:gradle:8.9.1/g' android/build.gradle
+          sed -i 's/gradle-[0-9.]*-all.zip/gradle-8.11.1-all.zip/g' android/gradle/wrapper/gradle-wrapper.properties
+          sed -i 's/gradle-[0-9.]*-bin.zip/gradle-8.11.1-bin.zip/g' android/gradle/wrapper/gradle-wrapper.properties
           npx cap sync android
 
       - name: Build Debug APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --console=plain
+          ./gradlew assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
