@@ -65,8 +65,10 @@ jobs:
           grep -q '"package_name"' "$STRINGS_FILE" || sed -i 's|</resources>|    <string name="package_name">com.sonance.music</string>\n</resources>|g' "$STRINGS_FILE"
           grep -q '"custom_url_scheme"' "$STRINGS_FILE" || sed -i 's|</resources>|    <string name="custom_url_scheme">com.sonance.music</string>\n</resources>|g' "$STRINGS_FILE"
           grep -q '"sonance_widget_description"' "$STRINGS_FILE" || sed -i 's|</resources>|    <string name="sonance_widget_description">Sonance Music Player Widget</string>\n</resources>|g' "$STRINGS_FILE"
-          if ! grep -q "com.google.android.gms.ads.APPLICATION_ID" android/app/src/main/AndroidManifest.xml; then
-            sed -i 's|</application>|    <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713"/>\n    </application>|g' android/app/src/main/AndroidManifest.xml
+          MANIFEST_FILE="android/app/src/main/AndroidManifest.xml"
+          grep -q "READ_MEDIA_AUDIO" "$MANIFEST_FILE" || sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />|g' "$MANIFEST_FILE"
+          if ! grep -q "com.google.android.gms.ads.APPLICATION_ID" "$MANIFEST_FILE"; then
+            sed -i 's|</application>|    <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713"/>\n    </application>|g' "$MANIFEST_FILE"
           fi
           npx cap sync android
 
