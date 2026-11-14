@@ -55,9 +55,16 @@ jobs:
           fi
           npx cap add android
           cp -r backup_main/* android/app/src/main/ 2>/dev/null || true
-          if [ -f "android/app/src/main/res/values/strings.xml" ] && ! grep -q "sonance_widget_description" android/app/src/main/res/values/strings.xml; then
-            sed -i 's|</resources>|    <string name="sonance_widget_description">Sonance Music Player Widget</string>\n</resources>|g' android/app/src/main/res/values/strings.xml
+          STRINGS_FILE="android/app/src/main/res/values/strings.xml"
+          if [ ! -f "$STRINGS_FILE" ]; then
+            mkdir -p android/app/src/main/res/values
+            echo '<resources></resources>' > "$STRINGS_FILE"
           fi
+          grep -q '"app_name"' "$STRINGS_FILE" || sed -i 's|</resources>|    <string name="app_name">Sonance</string>\n</resources>|g' "$STRINGS_FILE"
+          grep -q '"title_activity_main"' "$STRINGS_FILE" || sed -i 's|</resources>|    <string name="title_activity_main">Sonance</string>\n</resources>|g' "$STRINGS_FILE"
+          grep -q '"package_name"' "$STRINGS_FILE" || sed -i 's|</resources>|    <string name="package_name">com.sonance.music</string>\n</resources>|g' "$STRINGS_FILE"
+          grep -q '"custom_url_scheme"' "$STRINGS_FILE" || sed -i 's|</resources>|    <string name="custom_url_scheme">com.sonance.music</string>\n</resources>|g' "$STRINGS_FILE"
+          grep -q '"sonance_widget_description"' "$STRINGS_FILE" || sed -i 's|</resources>|    <string name="sonance_widget_description">Sonance Music Player Widget</string>\n</resources>|g' "$STRINGS_FILE"
           if ! grep -q "com.google.android.gms.ads.APPLICATION_ID" android/app/src/main/AndroidManifest.xml; then
             sed -i 's|</application>|    <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713"/>\n    </application>|g' android/app/src/main/AndroidManifest.xml
           fi
@@ -75,3 +82,4 @@ jobs:
         with:
           name: Sonance-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
+          
