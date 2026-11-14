@@ -1,5 +1,4 @@
 // Standalone Client-Side API Interceptor for Android APK / Static Builds
-// Handles /api/geo, /api/radio/stations, /api/streaming/search, and /api/ai/mood-synth directly without a Node server.
 
 const COUNTRY_PROFILES: Record<string, {
   country: string;
@@ -20,8 +19,11 @@ const COUNTRY_PROFILES: Record<string, {
   FR: { country: 'France', countryCode: 'FR', recommendedGenres: ['French House', 'Nu-Disco', 'Chanson', 'Electro', 'Jazz'], radioTags: ['french', 'paris', 'house', 'nu-disco', 'jazz'], audiusHighlightQuery: 'French House Nu-Disco' },
 };
 
+let detectedCountryCode = 'IN';
+
 function buildGeoProfile(codeRaw?: string, fallbackCountry?: string, region = 'Global', city = 'International') {
-  const code = (codeRaw || 'US').toUpperCase().slice(0, 2);
+  const code = (codeRaw || 'IN').toUpperCase().slice(0, 2);
+  detectedCountryCode = code;
   const preset = COUNTRY_PROFILES[code];
   if (preset) return { ...preset, region, city };
   return {
@@ -123,7 +125,7 @@ async function handleGeo(url: URL): Promise<Response> {
   } catch {
     // fallback
   }
-  return jsonResponse(buildGeoProfile('IN', 'India', 'Asia', 'Kolkata'));
+  return jsonResponse(buildGeoProfile('IN', 'India', 'West Bengal', 'Kolkata'));
 }
 
 async function handleRadio(url: URL): Promise<Response> {
@@ -141,7 +143,7 @@ async function handleRadio(url: URL): Promise<Response> {
     news: `/json/stations/bytag/news?limit=${limit * 2}&order=clickcount&reverse=true&hidebroken=true`,
   };
 
-  let apiPath = `/json/stations/topclick/${limit * 2}`;
+  let apiPath = `/json/stations/bycountrycodeexact/${encodeURIComponent(detectedCountryCode || 'IN')}?limit=${limit * 2}&order=clickcount&reverse=true&hidebroken=true`;
   if (preset && PRESET_PATHS[preset]) {
     apiPath = PRESET_PATHS[preset];
   } else if (countrycode) {
@@ -152,7 +154,11 @@ async function handleRadio(url: URL): Promise<Response> {
     apiPath = `/json/stations/search?name=${encodeURIComponent(search)}&limit=${limit * 2}&order=clickcount&reverse=true&hidebroken=true`;
   }
 
-  const raw = await fetchRadioBrowser(apiPath);
+  let raw = await fetchRadioBrowser(apiPath);
+  if (!Array.isArray(raw) || raw.length === 0) {
+    raw = await fetchRadioBrowser(`/json/stations/topclick/${limit * 2}`);
+  }
+
   const stations = (Array.isArray(raw) ? raw : [])
     .filter((s: any) => s && (s.url_resolved || s.url))
     .slice(0, limit)
@@ -197,7 +203,6 @@ async function handleStreaming(url: URL): Promise<Response> {
     let json = res.ok ? await res.json() : { data: [] };
     let items: any[] = Array.isArray(json?.data) ? json.data : [];
 
-    // Fallback to trending if search returned empty
     if (items.length === 0) {
       res = await nativeFetch(`${host}/v1/tracks/trending?app_name=Sonance&limit=${limit}&offset=${offset}`);
       json = res.ok ? await res.json() : { data: [] };
@@ -281,4 +286,4 @@ export function installStandaloneApiInterceptor() {
     }
     return nativeFetch(input, init);
   };
-           }
+}
