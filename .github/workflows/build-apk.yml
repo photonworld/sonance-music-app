@@ -46,17 +46,20 @@ jobs:
 
       - name: Setup Fresh Capacitor Android
         run: |
-          mkdir -p backup_res
-          cp -r android/app/src/main/res/* backup_res/ 2>/dev/null || true
+          mkdir -p backup_main
+          cp -r android/app/src/main/* backup_main/ 2>/dev/null || true
           rm -rf android
           npm install @capacitor/core @capacitor/cli @capacitor/android --legacy-peer-deps --force
           if [ ! -f "capacitor.config.ts" ] && [ ! -f "capacitor.config.json" ]; then
             npx cap init "Sonance" "com.sonance.music" --web-dir=dist
           fi
           npx cap add android
-          cp -rn backup_res/* android/app/src/main/res/ 2>/dev/null || true
+          cp -r backup_main/* android/app/src/main/ 2>/dev/null || true
           if [ -f "android/app/src/main/res/values/strings.xml" ] && ! grep -q "sonance_widget_description" android/app/src/main/res/values/strings.xml; then
             sed -i 's|</resources>|    <string name="sonance_widget_description">Sonance Music Player Widget</string>\n</resources>|g' android/app/src/main/res/values/strings.xml
+          fi
+          if ! grep -q "com.google.android.gms.ads.APPLICATION_ID" android/app/src/main/AndroidManifest.xml; then
+            sed -i 's|</application>|    <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713"/>\n    </application>|g' android/app/src/main/AndroidManifest.xml
           fi
           npx cap sync android
 
@@ -72,4 +75,3 @@ jobs:
         with:
           name: Sonance-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
-          
