@@ -25,7 +25,15 @@ jobs:
       - name: Install Dependencies & Build Web App
         run: |
           npm install --legacy-peer-deps --force
-          npm install terser @babel/core workbox-build --save-dev --legacy-peer-deps --force
+          cat << 'EOF' > vite.config.ts
+          import { defineConfig } from 'vite';
+          import react from '@vitejs/plugin-react';
+          import tailwindcss from '@tailwindcss/vite';
+
+          export default defineConfig({
+            plugins: [react(), tailwindcss()],
+          });
+          EOF
           npm run build
 
       - name: Setup Capacitor Android
@@ -52,3 +60,4 @@ jobs:
         with:
           name: Sonance-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
+          
