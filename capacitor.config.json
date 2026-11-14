@@ -1,0 +1,14 @@
+{
+  "appId": "com.ankit.sonance",
+  "appName": "Sonance",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "AdMob": {
+      "initializeForTesting": false
+    }
+  }
+}

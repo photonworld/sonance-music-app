@@ -1,0 +1,269 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --bg-canvas: #F8F7F4;
+    --bg-surface: #FFFFFF;
+    --bg-elevated: #F1EFEA;
+    --border-hairline: rgba(20, 20, 19, 0.10);
+    --text-primary: #141413;
+    --text-muted: #63625E;
+    --accent-primary: #D94E28;
+    --accent-contrast: #FFFFFF;
+    --vis-secondary: #1F4E79;
+    color-scheme: light;
+  }
+
+  html,
+  body {
+    height: 100%;
+    margin: 0;
+    background-color: var(--bg-canvas);
+    color: var(--text-primary);
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition: background-color 220ms cubic-bezier(0.22, 1, 0.36, 1), color 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .font-display {
+    font-family: 'Outfit', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  .font-mono-tabular {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Custom subtle scrollbars */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-hairline);
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+  }
+}
+
+/* Luxury shimmer skeleton loader */
+@keyframes sonance-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.sonance-shimmer {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--bg-elevated) 85%, transparent) 25%,
+    color-mix(in srgb, var(--bg-surface) 90%, transparent) 50%,
+    color-mix(in srgb, var(--bg-elevated) 85%, transparent) 75%
+  );
+  background-size: 200% 100%;
+  animation: sonance-shimmer 1.6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+/* Apple Music style ambient backdrop organic drift */
+@keyframes sonance-ambient-drift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-1.5%, 1.2%, 0) scale(1.03);
+  }
+  100% {
+    transform: translate3d(1.5%, -1%, 0) scale(1.01);
+  }
+}
+
+/* Tab horizontal transition choreography */
+@keyframes sonance-slide-from-right {
+  from {
+    opacity: 0;
+    transform: translate3d(26px, 0, 0) scale(0.988);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes sonance-slide-from-left {
+  from {
+    opacity: 0;
+    transform: translate3d(-26px, 0, 0) scale(0.988);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes sonance-sheet-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 40px, 0) scale(0.975);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes sonance-modal-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 28px, 0) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes sonance-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes sonance-heart-pop {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.36);
+  }
+  65% {
+    transform: scale(0.92);
+  }
+  100% {
+    transform: scale(1.1);
+  }
+}
+
+.sonance-stage-right {
+  animation: sonance-slide-from-right 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform, opacity;
+}
+
+.sonance-stage-left {
+  animation: sonance-slide-from-left 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform, opacity;
+}
+
+.sonance-sheet-enter {
+  animation: sonance-sheet-up 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform, opacity;
+}
+
+.sonance-modal-enter {
+  animation: sonance-modal-in 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform, opacity;
+}
+
+.sonance-backdrop-enter {
+  animation: sonance-backdrop-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.sonance-heart-liked {
+  animation: sonance-heart-pop 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes sonance-aurora-sheen {
+  0%,
+  100% {
+    opacity: 0.72;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    opacity: 0.96;
+    transform: translate3d(2%, -2%, 0) scale(1.04);
+  }
+}
+
+.sonance-aurora-sheen {
+  animation: sonance-aurora-sheen 9s ease-in-out infinite;
+}
+
+/* Tactile spring micro-interaction on buttons, cards, and rows */
+.sonance-press {
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sonance-press:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+/* Frosted glass elevation surface */
+.sonance-glass {
+  background-color: color-mix(in srgb, var(--bg-surface) 58%, transparent);
+  backdrop-filter: blur(14px) saturate(170%);
+  -webkit-backdrop-filter: blur(14px) saturate(170%);
+}
+
+/* Minimalist hardware range slider */
+input[type="range"].sonance-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type="range"].sonance-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 9999px;
+}
+
+input[type="range"].sonance-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: var(--accent-primary);
+  margin-top: -5px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.28);
+  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+input[type="range"].sonance-slider:hover::-webkit-slider-thumb {
+  transform: scale(1.22);
+}
+
+input[type="range"].sonance-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: 9999px;
+  background: var(--accent-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

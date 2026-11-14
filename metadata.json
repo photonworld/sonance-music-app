@@ -1,0 +1,8 @@
+{
+  "name": "Sonance",
+  "description": "Minimalist offline-capable high-resolution audio player with custom playlists, personalized themes, music-style visualizations, and beat-synced party lighting.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
