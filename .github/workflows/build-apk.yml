@@ -100,6 +100,7 @@ jobs:
           import android.media.session.PlaybackState;
           import android.os.Build;
           import android.os.IBinder;
+          import android.os.SystemClock;
           import android.util.Base64;
           import androidx.annotation.Nullable;
 
@@ -115,6 +116,8 @@ jobs:
               private String currentTitle = "Sonance";
               private String currentArtist = "Ready to play";
               private boolean currentPlaying = false;
+              private long currentPositionMs = 0L;
+              private long currentDurationMs = 0L;
               private Bitmap currentArtwork = null;
 
               @Override
@@ -125,22 +128,29 @@ jobs:
                   mediaSession.setCallback(new MediaSession.Callback() {
                       @Override
                       public void onPlay() {
-                          MainActivity.dispatchJsAction("play_pause");
+                          MainActivity.dispatchJsAction("play_pause", 0L);
                       }
 
                       @Override
                       public void onPause() {
-                          MainActivity.dispatchJsAction("play_pause");
+                          MainActivity.dispatchJsAction("play_pause", 0L);
                       }
 
                       @Override
                       public void onSkipToNext() {
-                          MainActivity.dispatchJsAction("next");
+                          MainActivity.dispatchJsAction("next", 0L);
                       }
 
                       @Override
                       public void onSkipToPrevious() {
-                          MainActivity.dispatchJsAction("prev");
+                          MainActivity.dispatchJsAction("prev", 0L);
+                      }
+
+                      @Override
+                      public void onSeekTo(long pos) {
+                          currentPositionMs = Math.max(0L, pos);
+                          MainActivity.dispatchJsAction("seek", currentPositionMs);
+                          updateSessionAndNotification();
                       }
                   });
                   mediaSession.setActive(true);
@@ -151,54 +161,63 @@ jobs:
                   if (intent != null && intent.getAction() != null) {
                       String action = intent.getAction();
                       if (ACTION_PREV.equals(action)) {
-                          MainActivity.dispatchJsAction("prev");
+                          MainActivity.dispatchJsAction("prev", 0L);
                       } else if (ACTION_PLAY_PAUSE.equals(action)) {
-                          MainActivity.dispatchJsAction("play_pause");
+                          MainActivity.dispatchJsAction("play_pause", 0L);
                       } else if (ACTION_NEXT.equals(action)) {
-                          MainActivity.dispatchJsAction("next");
+                          MainActivity.dispatchJsAction("next", 0L);
                       } else if (ACTION_UPDATE.equals(action)) {
                           String title = intent.getStringExtra("title");
                           String artist = intent.getStringExtra("artist");
                           if (title != null && !title.isEmpty()) currentTitle = title;
                           if (artist != null && !artist.isEmpty()) currentArtist = artist;
                           currentPlaying = intent.getBooleanExtra("isPlaying", false);
+                          currentPositionMs = Math.max(0L, intent.getLongExtra("positionMs", 0L));
+                          currentDurationMs = Math.max(0L, intent.getLongExtra("durationMs", 0L));
+
                           String artData = intent.getStringExtra("artwork");
                           if (artData != null && artData.startsWith("data:image")) {
                               try {
                                   int commaIdx = artData.indexOf(",");
                                   if (commaIdx > 0) {
                                       byte[] decoded = Base64.decode(artData.substring(commaIdx + 1), Base64.DEFAULT);
-                                      currentArtwork = BitmapFactory.decodeByteArray(decoded, 0, decoded.length);
+                                      Bitmap bmp = BitmapFactory.decodeByteArray(decoded, 0, decoded.length);
+                                      if (bmp != null) currentArtwork = bmp;
                                   }
                               } catch (Exception ignored) {}
                           }
                       }
                   }
                   updateSessionAndNotification();
-                  return START_NOT_STICKY;
+                  return START_STICKY;
               }
 
               private void updateSessionAndNotification() {
                   MediaMetadata.Builder meta = new MediaMetadata.Builder()
                       .putString(MediaMetadata.METADATA_KEY_TITLE, currentTitle)
-                      .putString(MediaMetadata.METADATA_KEY_ARTIST, currentArtist);
+                      .putString(MediaMetadata.METADATA_KEY_ARTIST, currentArtist)
+                      .putLong(MediaMetadata.METADATA_KEY_DURATION, currentDurationMs);
                   if (currentArtwork != null) {
                       meta.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, currentArtwork);
                   }
                   mediaSession.setMetadata(meta.build());
 
+                  long actions = PlaybackState.ACTION_PLAY |
+                      PlaybackState.ACTION_PAUSE |
+                      PlaybackState.ACTION_PLAY_PAUSE |
+                      PlaybackState.ACTION_SKIP_TO_NEXT |
+                      PlaybackState.ACTION_SKIP_TO_PREVIOUS;
+                  if (currentDurationMs > 0L) {
+                      actions |= PlaybackState.ACTION_SEEK_TO;
+                  }
+
                   PlaybackState state = new PlaybackState.Builder()
-                      .setActions(
-                          PlaybackState.ACTION_PLAY |
-                          PlaybackState.ACTION_PAUSE |
-                          PlaybackState.ACTION_PLAY_PAUSE |
-                          PlaybackState.ACTION_SKIP_TO_NEXT |
-                          PlaybackState.ACTION_SKIP_TO_PREVIOUS
-                      )
+                      .setActions(actions)
                       .setState(
                           currentPlaying ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED,
-                          PlaybackState.PLAYBACK_POSITION_UNKNOWN,
-                          1.0f
+                          currentPositionMs,
+                          currentPlaying ? 1.0f : 0.0f,
+                          SystemClock.elapsedRealtime()
                       )
                       .build();
                   mediaSession.setPlaybackState(state);
@@ -223,7 +242,7 @@ jobs:
                       .setContentTitle(currentTitle)
                       .setContentText(currentArtist)
                       .setContentIntent(contentPi)
-                      .setOngoing(currentPlaying)
+                      .setOngoing(true)
                       .setOnlyAlertOnce(true)
                       .addAction(new Notification.Action.Builder(
                           android.R.drawable.ic_media_previous, "Previous", prevPi).build())
@@ -311,6 +330,7 @@ jobs:
                   if (this.bridge != null && this.bridge.getWebView() != null) {
                       this.bridge.getWebView().addJavascriptInterface(new MediaNotifBridge(), "SonanceMediaBridge");
                   }
+                  startMediaService("Sonance", "Ready to play", false, 0L, 0L, "");
               }
 
               @Override
@@ -319,10 +339,28 @@ jobs:
                   super.onDestroy();
               }
 
-              public static void dispatchJsAction(String action) {
+              public static void dispatchJsAction(String action, long value) {
                   if (instance == null || instance.bridge == null || instance.bridge.getWebView() == null) return;
-                  final String js = "window.dispatchEvent(new CustomEvent('sonance-notif-action', { detail: '" + action + "' }));";
+                  final String js = "window.dispatchEvent(new CustomEvent('sonance-notif-action', { detail: { action: '" + action + "', value: " + value + " } }));";
                   instance.runOnUiThread(() -> instance.bridge.getWebView().evaluateJavascript(js, null));
+              }
+
+              private void startMediaService(String title, String artist, boolean isPlaying, long positionMs, long durationMs, String artwork) {
+                  try {
+                      Intent serviceIntent = new Intent(MainActivity.this, SonanceMediaService.class);
+                      serviceIntent.setAction(SonanceMediaService.ACTION_UPDATE);
+                      serviceIntent.putExtra("title", title);
+                      serviceIntent.putExtra("artist", artist);
+                      serviceIntent.putExtra("isPlaying", isPlaying);
+                      serviceIntent.putExtra("positionMs", positionMs);
+                      serviceIntent.putExtra("durationMs", durationMs);
+                      serviceIntent.putExtra("artwork", artwork);
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                          startForegroundService(serviceIntent);
+                      } else {
+                          startService(serviceIntent);
+                      }
+                  } catch (Exception ignored) {}
               }
 
               private void requestRuntimePermissions() {
@@ -349,35 +387,4 @@ jobs:
 
               private class MediaNotifBridge {
                   @JavascriptInterface
-                  public void updateNotification(String title, String artist, boolean isPlaying, String artwork) {
-                      Intent serviceIntent = new Intent(MainActivity.this, SonanceMediaService.class);
-                      serviceIntent.setAction(SonanceMediaService.ACTION_UPDATE);
-                      serviceIntent.putExtra("title", title);
-                      serviceIntent.putExtra("artist", artist);
-                      serviceIntent.putExtra("isPlaying", isPlaying);
-                      serviceIntent.putExtra("artwork", artwork);
-                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                          startForegroundService(serviceIntent);
-                      } else {
-                          startService(serviceIntent);
-                      }
-                  }
-              }
-          }
-          EOF
-          fi
-          npx cap sync android
-
-      - name: Build Debug APK
-        run: |
-          set -o pipefail
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --console=plain | tail -n 50
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: Sonance-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
-          
+                  public void updateNotification(String title, String artist, boolean isPlaying, long positionMs, long durationMs, S
