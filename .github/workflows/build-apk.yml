@@ -25,6 +25,7 @@ jobs:
       - name: Install Dependencies & Build Web App
         run: |
           npm install --legacy-peer-deps --force
+          npm install terser --save-dev --legacy-peer-deps --force
           npm run build
 
       - name: Setup Capacitor Android
