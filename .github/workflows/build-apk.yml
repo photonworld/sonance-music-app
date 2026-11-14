@@ -55,6 +55,9 @@ jobs:
             npx cap add android
             cp -rn temp_android/* android/ 2>/dev/null || true
           fi
+          if ! grep -q "sonance_widget_description" android/app/src/main/res/values/strings.xml; then
+            sed -i 's|</resources>|    <string name="sonance_widget_description">Sonance Music Player Widget</string>\n</resources>|g' android/app/src/main/res/values/strings.xml
+          fi
           npx cap sync android
 
       - name: Build Debug APK
@@ -68,3 +71,4 @@ jobs:
         with:
           name: Sonance-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
+          
