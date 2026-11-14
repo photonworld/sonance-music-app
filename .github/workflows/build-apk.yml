@@ -25,7 +25,7 @@ jobs:
       - name: Install Dependencies & Build Web App
         run: |
           npm install --legacy-peer-deps --force
-          npm install tslib --legacy-peer-deps --force
+          npm install react-is tslib --legacy-peer-deps --force
           echo "export const registerSW = () => () => {}; export const useRegisterSW = () => ({ needRefresh: [false, () => {}], offlineReady: [false, () => {}], updateServiceWorker: () => {} });" > src/pwa-mock.ts
           cat << 'EOF' > vite.config.ts
           import { defineConfig } from 'vite';
