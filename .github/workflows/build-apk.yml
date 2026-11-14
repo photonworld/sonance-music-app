@@ -58,6 +58,7 @@ jobs:
           if ! grep -q "sonance_widget_description" android/app/src/main/res/values/strings.xml; then
             sed -i 's|</resources>|    <string name="sonance_widget_description">Sonance Music Player Widget</string>\n</resources>|g' android/app/src/main/res/values/strings.xml
           fi
+          find android -name "*.gradle" -exec sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' {} +
           npx cap sync android
 
       - name: Build Debug APK
