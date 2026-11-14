@@ -25,6 +25,7 @@ jobs:
       - name: Install Dependencies & Build Web App
         run: |
           npm install --legacy-peer-deps --force
+          echo "export const registerSW = () => () => {}; export const useRegisterSW = () => ({ needRefresh: [false, () => {}], offlineReady: [false, () => {}], updateServiceWorker: () => {} });" > src/pwa-mock.ts
           cat << 'EOF' > vite.config.ts
           import { defineConfig } from 'vite';
           import react from '@vitejs/plugin-react';
@@ -32,6 +33,12 @@ jobs:
 
           export default defineConfig({
             plugins: [react(), tailwindcss()],
+            resolve: {
+              alias: {
+                'virtual:pwa-register': '/src/pwa-mock.ts',
+                'virtual:pwa-register/react': '/src/pwa-mock.ts'
+              }
+            }
           });
           EOF
           npm run build
@@ -60,4 +67,3 @@ jobs:
         with:
           name: Sonance-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
-          
