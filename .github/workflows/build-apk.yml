@@ -74,6 +74,22 @@ jobs:
           fi
           npx cap sync android
 
+      - name: Ensure Android package & R imports match namespace
+        run: |
+          NAMESPACE=$(sed -n 's/.*namespace *= *"\([^"]*\)".*/\1/p' android/app/build.gradle | head -n 1)
+          if [ -n "$NAMESPACE" ]; then
+            if [ -d "android/app/src/main/java/com/soulwave/music" ] && [ -d "android/app/src/main/java/com/ankit/sonance" ]; then
+              rm -rf android/app/src/main/java/com/ankit/sonance
+            elif [ -d "android/app/src/main/java/com/ankit/sonance" ]; then
+              for f in android/app/src/main/java/com/ankit/sonance/*.java android/app/src/main/java/com/ankit/sonance/*.kt; do
+                [ -f "$f" ] || continue
+                if grep -qE '\bR\.(layout|id|drawable|string|color|mipmap|xml)\.' "$f" && ! grep -q "import ${NAMESPACE}\.R" "$f"; then
+                  sed -i "s/^package .*/&\n\nimport ${NAMESPACE}.R;/" "$f"
+                fi
+              done
+            fi
+          fi
+
       - name: Make Gradle wrapper executable
         run: chmod +x android/gradlew
 

@@ -9,6 +9,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.widget.RemoteViews;
+import com.soulwave.music.R;
 
 public class SonanceWidgetProvider extends AppWidgetProvider {
 
