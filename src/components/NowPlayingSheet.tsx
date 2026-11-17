@@ -36,7 +36,13 @@ import {
   VisualizerMode,
 } from '../types/audio';
 import { formatDuration } from '../utils/audioMetadata';
-import { triggerHapticLight, triggerHapticMedium } from '../utils/haptics';
+import {
+  triggerHapticLight,
+  triggerHapticMedium,
+  triggerHapticSelectionChanged,
+  triggerHapticSelectionEnd,
+  triggerHapticSelectionStart,
+} from '../utils/haptics';
 import { AmbientBackdrop } from './AmbientBackdrop';
 import { DownloadButton } from './DownloadButton';
 import {
@@ -470,8 +476,10 @@ export const NowPlayingSheet: React.FC<NowPlayingSheetProps> = ({
                       role="tab"
                       aria-selected={active}
                       onClick={() => {
-                        void triggerHapticLight();
-                        setQuantumMode(m.id);
+                        if (quantumMode !== m.id) {
+                          void triggerHapticMedium();
+                          setQuantumMode(m.id);
+                        }
                       }}
                       className="sonance-press px-3 py-1.5 rounded-full text-[11px] font-medium whitespace-nowrap shrink-0"
                       style={{
@@ -509,7 +517,7 @@ export const NowPlayingSheet: React.FC<NowPlayingSheetProps> = ({
             <button
               type="button"
               onClick={() => {
-                void triggerHapticLight();
+                void triggerHapticMedium();
                 setStageMode('visualizer');
               }}
               className="sonance-press inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap shrink-0"
@@ -638,14 +646,21 @@ export const NowPlayingSheet: React.FC<NowPlayingSheetProps> = ({
                   max={safeDuration || 1}
                   step={0.1}
                   value={Math.min(effectiveTime, safeDuration || 1)}
-                  onChange={(e) => setScrubPreview(parseFloat(e.target.value))}
+                  onMouseDown={() => void triggerHapticSelectionStart()}
+                  onTouchStart={() => void triggerHapticSelectionStart()}
+                  onChange={(e) => {
+                    void triggerHapticSelectionChanged(75);
+                    setScrubPreview(parseFloat(e.target.value));
+                  }}
                   onMouseUp={() => {
+                    void triggerHapticSelectionEnd();
                     if (scrubPreview !== null) {
                       onSeek(scrubPreview);
                       setScrubPreview(null);
                     }
                   }}
                   onTouchEnd={() => {
+                    void triggerHapticSelectionEnd();
                     if (scrubPreview !== null) {
                       onSeek(scrubPreview);
                       setScrubPreview(null);
@@ -782,7 +797,14 @@ export const NowPlayingSheet: React.FC<NowPlayingSheetProps> = ({
                 max={1}
                 step={0.01}
                 value={isMuted ? 0 : volume}
-                onChange={(e) => onVolumeChange(parseFloat(e.target.value))}
+                onMouseDown={() => void triggerHapticSelectionStart()}
+                onTouchStart={() => void triggerHapticSelectionStart()}
+                onChange={(e) => {
+                  void triggerHapticSelectionChanged(60);
+                  onVolumeChange(parseFloat(e.target.value));
+                }}
+                onMouseUp={() => void triggerHapticSelectionEnd()}
+                onTouchEnd={() => void triggerHapticSelectionEnd()}
                 aria-label="Volume"
                 className="sonance-slider flex-1"
                 style={{
@@ -822,7 +844,7 @@ export const NowPlayingSheet: React.FC<NowPlayingSheetProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  void triggerHapticLight();
+                  void triggerHapticMedium();
                   setStageMode((m) => (m === 'artwork' ? 'visualizer' : 'artwork'));
                 }}
                 className="sonance-press min-h-[44px] flex items-center justify-center gap-1.5 rounded-2xl border text-xs font-medium px-2"
@@ -903,7 +925,7 @@ export const NowPlayingSheet: React.FC<NowPlayingSheetProps> = ({
                         key={presetKey}
                         type="button"
                         onClick={() => {
-                          void triggerHapticLight();
+                          void triggerHapticMedium();
                           onApplyEQPreset(presetKey);
                         }}
                         className="sonance-press px-2.5 py-1 text-xs font-medium rounded-lg border whitespace-nowrap"
@@ -931,7 +953,14 @@ export const NowPlayingSheet: React.FC<NowPlayingSheetProps> = ({
                         max={12}
                         step={0.5}
                         value={band.gain}
-                        onChange={(e) => onChangeEQBand(index, parseFloat(e.target.value))}
+                        onMouseDown={() => void triggerHapticSelectionStart()}
+                        onTouchStart={() => void triggerHapticSelectionStart()}
+                        onChange={(e) => {
+                          void triggerHapticSelectionChanged(55);
+                          onChangeEQBand(index, parseFloat(e.target.value));
+                        }}
+                        onMouseUp={() => void triggerHapticSelectionEnd()}
+                        onTouchEnd={() => void triggerHapticSelectionEnd()}
                         aria-label={`${band.label} EQ gain`}
                         className="sonance-slider h-20 w-4 [writing-mode:vertical-lr] [direction:rtl]"
                       />

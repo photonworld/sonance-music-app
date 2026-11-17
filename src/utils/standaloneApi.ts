@@ -273,11 +273,15 @@ async function handleAiMoodSynth(init?: RequestInit): Promise<Response> {
 }
 
 const nativeFetch = window.fetch.bind(window);
+let interceptorInstalled = false;
 
 export function installStandaloneApiInterceptor() {
-  window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    const rawUrl = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
-    if (rawUrl.startsWith('/api/')) {
+  if (interceptorInstalled) return;
+
+  const wrappedFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const rawUrl =
+      typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+    if (typeof rawUrl === 'string' && rawUrl.startsWith('/api/')) {
       const parsed = new URL(rawUrl, window.location.origin);
       if (parsed.pathname === '/api/geo') return handleGeo(parsed);
       if (parsed.pathname === '/api/radio/stations') return handleRadio(parsed);
@@ -286,4 +290,25 @@ export function installStandaloneApiInterceptor() {
     }
     return nativeFetch(input, init);
   };
+
+  try {
+    const desc = Object.getOwnPropertyDescriptor(window, 'fetch');
+    if (desc && !desc.configurable) {
+      if (desc.writable) {
+        window.fetch = wrappedFetch;
+        interceptorInstalled = true;
+      }
+      return;
+    }
+
+    Object.defineProperty(window, 'fetch', {
+      value: wrappedFetch,
+      writable: true,
+      configurable: true,
+      enumerable: true,
+    });
+    interceptorInstalled = true;
+  } catch {
+    // Keep native fetch intact if the host environment locks window.fetch
+  }
 }

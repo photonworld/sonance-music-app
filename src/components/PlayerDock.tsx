@@ -22,7 +22,13 @@ import {
 } from 'lucide-react';
 import { EQBand, EQPresetId, RepeatMode, SleepTimerMode, Track } from '../types/audio';
 import { formatDuration } from '../utils/audioMetadata';
-import { triggerHapticLight, triggerHapticMedium } from '../utils/haptics';
+import {
+  triggerHapticLight,
+  triggerHapticMedium,
+  triggerHapticSelectionChanged,
+  triggerHapticSelectionEnd,
+  triggerHapticSelectionStart,
+} from '../utils/haptics';
 import { DownloadButton } from './DownloadButton';
 import { EqualizerPopover } from './EqualizerPopover';
 
@@ -155,6 +161,9 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
     const dx = e.touches[0].clientX - start.x;
     const dy = e.touches[0].clientY - start.y;
     if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.15) {
+      if (!isSwiping) {
+        void triggerHapticSelectionStart();
+      }
       setIsSwiping(true);
       setSwipeOffsetX(Math.max(-56, Math.min(56, dx * 0.65)));
     }
@@ -229,7 +238,14 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
             max={safeDuration || 1}
             step={0.1}
             value={Math.min(currentTime, safeDuration || 1)}
-            onChange={(e) => onSeek(parseFloat(e.target.value))}
+            onMouseDown={() => void triggerHapticSelectionStart()}
+            onTouchStart={() => void triggerHapticSelectionStart()}
+            onChange={(e) => {
+              void triggerHapticSelectionChanged(75);
+              onSeek(parseFloat(e.target.value));
+            }}
+            onMouseUp={() => void triggerHapticSelectionEnd()}
+            onTouchEnd={() => void triggerHapticSelectionEnd()}
             aria-label="Seek audio position"
             className="hidden sm:block absolute left-2 right-2 -top-1.5 h-4 opacity-0 cursor-pointer z-10"
           />
@@ -597,7 +613,14 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
                 max={1}
                 step={0.01}
                 value={isMuted ? 0 : volume}
-                onChange={(e) => onVolumeChange(parseFloat(e.target.value))}
+                onMouseDown={() => void triggerHapticSelectionStart()}
+                onTouchStart={() => void triggerHapticSelectionStart()}
+                onChange={(e) => {
+                  void triggerHapticSelectionChanged(60);
+                  onVolumeChange(parseFloat(e.target.value));
+                }}
+                onMouseUp={() => void triggerHapticSelectionEnd()}
+                onTouchEnd={() => void triggerHapticSelectionEnd()}
                 aria-label="Volume"
                 className="sonance-slider w-20"
                 style={{

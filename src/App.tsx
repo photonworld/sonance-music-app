@@ -35,7 +35,14 @@ import { SynesthesiaStudio } from './components/SynesthesiaStudio';
 import { ThemePicker } from './components/ThemePicker';
 import { TrackList } from './components/TrackList';
 import { WorldRadioMap } from './components/WorldRadioMap';
-import { triggerHapticLight, triggerHapticMedium } from './utils/haptics';
+import {
+  triggerHapticLight,
+  triggerHapticMedium,
+  triggerHapticSelectionEnd,
+  triggerHapticSelectionStart,
+  triggerHapticSuccess,
+  triggerHapticWarning,
+} from './utils/haptics';
 import { useAndroidBannerAd } from './hooks/useAndroidBannerAd';
 import { useAudioEngine } from './hooks/useAudioEngine';
 import { applyThemePalette, THEMES } from './themes/themes';
@@ -610,6 +617,7 @@ export default function App() {
     async (fileList: FileList | File[]) => {
       const files = Array.from(fileList).filter(isSupportedAudioFile);
       if (files.length === 0) {
+        void triggerHapticWarning();
         showNotice('No supported audio files found. Please select MP3, FLAC, WAV, AAC, M4A, or OGG files.');
         return;
       }
@@ -647,6 +655,7 @@ export default function App() {
           }
         }
 
+        void triggerHapticSuccess();
         showNotice(
           `Saved ${imported.length} ${imported.length === 1 ? 'track' : 'tracks'} for offline playback.`
         );
@@ -657,19 +666,26 @@ export default function App() {
 
   // Drag & Drop handlers on window
   const handleDragOver = (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes('Files')) return;
     e.preventDefault();
-    if (!isDraggingFiles) setIsDraggingFiles(true);
+    if (!isDraggingFiles) {
+      setIsDraggingFiles(true);
+      void triggerHapticSelectionStart();
+    }
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
     if (e.currentTarget === e.target) {
       setIsDraggingFiles(false);
+      void triggerHapticSelectionEnd();
     }
   };
 
   const handleDrop = (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes('Files')) return;
     e.preventDefault();
     setIsDraggingFiles(false);
+    void triggerHapticSelectionEnd();
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       void handleImportFiles(e.dataTransfer.files);
     }
@@ -978,6 +994,51 @@ export default function App() {
     const updated: Playlist = {
       ...pl,
       trackIds: pl.trackIds.filter((id) => id !== trackId),
+      updatedAt: Date.now(),
+    };
+    await savePlaylist(updated);
+    setPlaylists((prev) => prev.map((p) => (p.id === playlistId ? updated : p)));
+  };
+
+  const handleDropTrackToPlaylist = async (playlistId: string, trackId: string) => {
+    const pl = playlists.find((p) => p.id === playlistId);
+    if (!pl) return;
+    if (pl.trackIds.includes(trackId)) {
+      showNotice(`Already in "${pl.name}"`);
+      return;
+    }
+    const updated: Playlist = {
+      ...pl,
+      trackIds: [...pl.trackIds, trackId],
+      updatedAt: Date.now(),
+    };
+    await savePlaylist(updated);
+    setPlaylists((prev) => prev.map((p) => (p.id === playlistId ? updated : p)));
+    showNotice(`Added track to "${pl.name}"`);
+  };
+
+  const handleReorderPlaylistTracks = async (
+    playlistId: string,
+    fromIndex: number,
+    toIndex: number
+  ) => {
+    const pl = playlists.find((p) => p.id === playlistId);
+    if (!pl) return;
+    const nextIds = [...pl.trackIds];
+    if (
+      fromIndex < 0 ||
+      toIndex < 0 ||
+      fromIndex >= nextIds.length ||
+      toIndex >= nextIds.length ||
+      fromIndex === toIndex
+    ) {
+      return;
+    }
+    const [moved] = nextIds.splice(fromIndex, 1);
+    nextIds.splice(toIndex, 0, moved);
+    const updated: Playlist = {
+      ...pl,
+      trackIds: nextIds,
       updatedAt: Date.now(),
     };
     await savePlaylist(updated);
@@ -1487,6 +1548,7 @@ export default function App() {
           onCreatePlaylist={(name) => void handleCreatePlaylist(name)}
           onRenamePlaylist={(id, name) => void handleRenamePlaylist(id, name)}
           onDeletePlaylist={(id) => void handleDeletePlaylist(id)}
+          onDropTrackToPlaylist={(plId, tId) => void handleDropTrackToPlaylist(plId, tId)}
           onTriggerImport={() => fileInputRef.current?.click()}
           onScanDevice={() => void handleScanDevice()}
           isScanning={isScanningDevice}
@@ -1716,8 +1778,13 @@ export default function App() {
                         <button
                           key={m.id}
                           type="button"
-                          onClick={() => setVisualizerMode(m.id)}
-                          className="px-2.5 py-1.5 text-xs font-medium rounded-md whitespace-nowrap shrink-0 transition-colors"
+                          onClick={() => {
+                            if (visualizerMode !== m.id) {
+                              void triggerHapticMedium();
+                              setVisualizerMode(m.id);
+                            }
+                          }}
+                          className="sonance-press px-2.5 py-1.5 text-xs font-medium rounded-md whitespace-nowrap shrink-0 transition-colors"
                           style={{
                             backgroundColor: active ? 'var(--bg-surface)' : 'transparent',
                             color: active ? 'var(--text-primary)' : 'var(--text-muted)',
@@ -1780,8 +1847,11 @@ export default function App() {
                           <button
                             key={lvl.id}
                             type="button"
-                            onClick={() => setPartyIntensity(lvl.id)}
-                            className="px-2.5 py-1 text-xs font-medium rounded-md whitespace-nowrap shrink-0 transition-colors"
+                            onClick={() => {
+                              void triggerHapticLight();
+                              setPartyIntensity(lvl.id);
+                            }}
+                            className="sonance-press px-2.5 py-1 text-xs font-medium rounded-md whitespace-nowrap shrink-0 transition-colors"
                             style={{
                               backgroundColor: active ? 'var(--bg-surface)' : 'transparent',
                               color: active
@@ -1932,6 +2002,9 @@ export default function App() {
                     onDeleteTrack={(id) => void handleDeleteTrack(id)}
                     onRemoveFromPlaylist={(plId, tId) =>
                       void handleRemoveFromPlaylist(plId, tId)
+                    }
+                    onReorderPlaylistTracks={(plId, fromIdx, toIdx) =>
+                      void handleReorderPlaylistTracks(plId, fromIdx, toIdx)
                     }
                     onDownloadTrack={(t) => void handleDownloadTrack(t)}
                     onTriggerImport={() => fileInputRef.current?.click()}

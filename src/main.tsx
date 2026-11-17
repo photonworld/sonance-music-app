@@ -147,7 +147,7 @@ function setupNotificationMediaBridge() {
           audio.pause();
         }
       } else {
-        const dockBtn = Array.from(document.querySelectorAll('footer button, [class*="dock"] button, button')).find((b) => {
+        const dockBtn = Array.from(document.querySelectorAll<HTMLButtonElement>('footer button, [class*="dock"] button, button')).find((b) => {
           const lbl = (b.getAttribute('aria-label') || b.title || '').toLowerCase();
           return lbl === 'play' || lbl === 'pause' || lbl.includes('play/pause');
         });

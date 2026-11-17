@@ -2,6 +2,13 @@ import React from 'react';
 import { Sliders, X } from 'lucide-react';
 import { EQ_PRESETS } from '../hooks/useAudioEngine';
 import { EQBand, EQPresetId } from '../types/audio';
+import {
+  triggerHapticLight,
+  triggerHapticMedium,
+  triggerHapticSelectionChanged,
+  triggerHapticSelectionEnd,
+  triggerHapticSelectionStart,
+} from '../utils/haptics';
 
 interface EqualizerPopoverProps {
   eqPreset: EQPresetId;
@@ -43,7 +50,10 @@ export const EqualizerPopover: React.FC<EqualizerPopoverProps> = ({
         </div>
         <button
           type="button"
-          onClick={onClose}
+          onClick={() => {
+            void triggerHapticLight();
+            onClose();
+          }}
           aria-label="Close equalizer"
           className="p-1.5 rounded-lg hover:opacity-75"
         >
@@ -59,7 +69,10 @@ export const EqualizerPopover: React.FC<EqualizerPopoverProps> = ({
             <button
               key={presetKey}
               type="button"
-              onClick={() => onApplyPreset(presetKey)}
+              onClick={() => {
+                void triggerHapticMedium();
+                onApplyPreset(presetKey);
+              }}
               className="px-2.5 py-1 text-xs font-medium rounded-lg border whitespace-nowrap shrink-0 transition-colors"
               style={{
                 backgroundColor: active ? 'var(--accent-primary)' : 'var(--bg-elevated)',
@@ -86,7 +99,14 @@ export const EqualizerPopover: React.FC<EqualizerPopoverProps> = ({
               max={12}
               step={0.5}
               value={band.gain}
-              onChange={(e) => onChangeBand(index, parseFloat(e.target.value))}
+              onMouseDown={() => void triggerHapticSelectionStart()}
+              onTouchStart={() => void triggerHapticSelectionStart()}
+              onChange={(e) => {
+                void triggerHapticSelectionChanged(55);
+                onChangeBand(index, parseFloat(e.target.value));
+              }}
+              onMouseUp={() => void triggerHapticSelectionEnd()}
+              onTouchEnd={() => void triggerHapticSelectionEnd()}
               aria-label={`${band.label} EQ gain`}
               className="sonance-slider h-24 w-4 [writing-mode:vertical-lr] [direction:rtl]"
               style={{ accentColor: 'var(--accent-primary)' }}
@@ -111,7 +131,10 @@ export const EqualizerPopover: React.FC<EqualizerPopoverProps> = ({
               <button
                 key={rate}
                 type="button"
-                onClick={() => onChangePlaybackRate(rate)}
+                onClick={() => {
+                  void triggerHapticLight();
+                  onChangePlaybackRate(rate);
+                }}
                 className="px-2 py-1 rounded-md text-xs font-mono-tabular font-medium transition-colors"
                 style={{
                   backgroundColor: active ? 'var(--bg-elevated)' : 'transparent',

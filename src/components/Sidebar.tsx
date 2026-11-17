@@ -17,7 +17,14 @@ import {
 } from 'lucide-react';
 import { Playlist } from '../types/audio';
 import { formatBytes } from '../utils/audioMetadata';
-import { triggerHapticLight } from '../utils/haptics';
+import {
+  triggerHapticLight,
+  triggerHapticMedium,
+  triggerHapticSelectionChanged,
+  triggerHapticSelectionEnd,
+  triggerHapticSuccess,
+  triggerHapticWarning,
+} from '../utils/haptics';
 
 export type LibraryFilter =
   | { type: 'all' }
@@ -39,6 +46,7 @@ interface SidebarProps {
   onCreatePlaylist: (name: string) => void;
   onRenamePlaylist: (playlistId: string, name: string) => void;
   onDeletePlaylist: (playlistId: string) => void;
+  onDropTrackToPlaylist?: (playlistId: string, trackId: string) => void;
   onTriggerImport: () => void;
   onScanDevice: () => void;
   isScanning: boolean;
@@ -58,6 +66,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCreatePlaylist,
   onRenamePlaylist,
   onDeletePlaylist,
+  onDropTrackToPlaylist,
   onTriggerImport,
   onScanDevice,
   isScanning,
@@ -69,11 +78,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [newName, setNewName] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
+  const [dragOverPlaylistId, setDragOverPlaylistId] = useState<string | null>(null);
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = newName.trim();
     if (!trimmed) return;
+    void triggerHapticSuccess();
     onCreatePlaylist(trimmed);
     setNewName('');
     setCreating(false);
@@ -83,6 +94,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     e.preventDefault();
     const trimmed = editName.trim();
     if (trimmed) {
+      void triggerHapticSuccess();
       onRenamePlaylist(id, trimmed);
     }
     setEditingId(null);
@@ -170,6 +182,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <button
             type="button"
             onClick={() => {
+              void triggerHapticLight();
               onSelectFilter({ type: 'discover' });
               onCloseMobile();
             }}
@@ -195,6 +208,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <button
             type="button"
             onClick={() => {
+              void triggerHapticLight();
               onSelectFilter({ type: 'radiomap' });
               onCloseMobile();
             }}
@@ -220,6 +234,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <button
             type="button"
             onClick={() => {
+              void triggerHapticLight();
               onSelectFilter({ type: 'synesthesia' });
               onCloseMobile();
             }}
@@ -255,6 +270,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <button
             type="button"
             onClick={() => {
+              void triggerHapticLight();
               onSelectFilter({ type: 'all' });
               onCloseMobile();
             }}
@@ -288,6 +304,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <button
             type="button"
             onClick={() => {
+              void triggerHapticLight();
               onSelectFilter({ type: 'favorites' });
               onCloseMobile();
             }}
@@ -321,6 +338,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <button
             type="button"
             onClick={() => {
+              void triggerHapticLight();
               onSelectFilter({ type: 'downloads' });
               onCloseMobile();
             }}
@@ -360,7 +378,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </span>
             <button
               type="button"
-              onClick={() => setCreating((v) => !v)}
+              onClick={() => {
+                void triggerHapticLight();
+                setCreating((v) => !v);
+              }}
               aria-label="Create new playlist"
               className="min-h-[32px] min-w-[32px] flex items-center justify-center rounded-md hover:opacity-75 transition-opacity"
               style={{ color: 'var(--text-primary)' }}
@@ -403,7 +424,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {playlists.length === 0 && !creating ? (
             <button
               type="button"
-              onClick={() => setCreating(true)}
+              onClick={() => {
+                void triggerHapticLight();
+                setCreating(true);
+              }}
               className="w-full rounded-lg border border-dashed px-3 py-3 text-left text-xs transition-colors hover:opacity-80"
               style={{
                 borderColor: 'var(--border-hairline)',
@@ -417,6 +441,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {playlists.map((pl) => {
                 const isActive =
                   activeFilter.type === 'playlist' && activeFilter.playlistId === pl.id;
+                const isDropTarget = dragOverPlaylistId === pl.id;
 
                 if (editingId === pl.id) {
                   return (
@@ -446,14 +471,45 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 return (
                   <div
                     key={pl.id}
-                    className="group flex items-center justify-between rounded-lg px-2.5 min-h-[40px] transition-colors"
+                    onDragOver={(e) => {
+                      if (e.dataTransfer.types.includes('application/x-sonance-track')) {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'copy';
+                        if (dragOverPlaylistId !== pl.id) {
+                          setDragOverPlaylistId(pl.id);
+                          void triggerHapticSelectionChanged();
+                        }
+                      }
+                    }}
+                    onDragLeave={(e) => {
+                      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                        setDragOverPlaylistId((prev) => (prev === pl.id ? null : prev));
+                      }
+                    }}
+                    onDrop={(e) => {
+                      const trackId = e.dataTransfer.getData('application/x-sonance-track');
+                      if (trackId) {
+                        e.preventDefault();
+                        setDragOverPlaylistId(null);
+                        void triggerHapticSuccess();
+                        void triggerHapticSelectionEnd();
+                        onDropTrackToPlaylist?.(pl.id, trackId);
+                      }
+                    }}
+                    className="group flex items-center justify-between rounded-lg px-2.5 min-h-[40px] transition-colors border"
                     style={{
-                      backgroundColor: isActive ? 'var(--bg-elevated)' : 'transparent',
+                      backgroundColor: isDropTarget
+                        ? 'color-mix(in srgb, var(--accent-primary) 16%, var(--bg-elevated))'
+                        : isActive
+                          ? 'var(--bg-elevated)'
+                          : 'transparent',
+                      borderColor: isDropTarget ? 'var(--accent-primary)' : 'transparent',
                     }}
                   >
                     <button
                       type="button"
                       onClick={() => {
+                        void triggerHapticMedium();
                         onSelectFilter({ type: 'playlist', playlistId: pl.id });
                         onCloseMobile();
                       }}
@@ -463,7 +519,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <ListMusic
                         className="w-4 h-4 shrink-0"
                         style={{
-                          color: isActive ? 'var(--accent-primary)' : 'var(--text-muted)',
+                          color: isActive || isDropTarget ? 'var(--accent-primary)' : 'var(--text-muted)',
                         }}
                       />
                       <span className="truncate">{pl.name}</span>
@@ -480,6 +536,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         <button
                           type="button"
                           onClick={() => {
+                            void triggerHapticLight();
                             setEditingId(pl.id);
                             setEditName(pl.name);
                           }}
@@ -491,7 +548,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         </button>
                         <button
                           type="button"
-                          onClick={() => onDeletePlaylist(pl.id)}
+                          onClick={() => {
+                            void triggerHapticWarning();
+                            onDeletePlaylist(pl.id);
+                          }}
                           aria-label={`Delete ${pl.name}`}
                           className="p-1.5 rounded hover:opacity-75"
                           style={{ color: 'var(--text-muted)' }}

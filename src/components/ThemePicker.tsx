@@ -2,6 +2,7 @@ import React from 'react';
 import { Check, Palette, X } from 'lucide-react';
 import { THEME_LIST } from '../themes/themes';
 import { ThemeId } from '../types/audio';
+import { triggerHapticLight, triggerHapticMedium } from '../utils/haptics';
 
 interface ThemePickerProps {
   activeTheme: ThemeId;
@@ -30,7 +31,10 @@ export const ThemePicker: React.FC<ThemePickerProps> = ({
         </div>
         <button
           type="button"
-          onClick={onClose}
+          onClick={() => {
+            void triggerHapticLight();
+            onClose();
+          }}
           aria-label="Close theme selector"
           className="p-1.5 rounded-lg hover:opacity-75"
         >
@@ -45,7 +49,10 @@ export const ThemePicker: React.FC<ThemePickerProps> = ({
             <button
               key={theme.id}
               type="button"
-              onClick={() => onSelectTheme(theme.id)}
+              onClick={() => {
+                void triggerHapticMedium();
+                onSelectTheme(theme.id);
+              }}
               className="w-full flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors"
               style={{
                 backgroundColor: isSelected ? 'var(--bg-elevated)' : 'transparent',

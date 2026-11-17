@@ -25,7 +25,11 @@ import {
   VisualizerMode,
 } from '../types/audio';
 import { formatBytes } from '../utils/audioMetadata';
-import { triggerHapticLight, triggerHapticMedium } from '../utils/haptics';
+import {
+  triggerHapticLight,
+  triggerHapticMedium,
+  triggerHapticWarning,
+} from '../utils/haptics';
 import { ListeningVibeTrends } from './ListeningVibeTrends';
 import { SonanceLogo3D } from './SonanceLogo3D';
 
@@ -349,8 +353,10 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                         key={m.id}
                         type="button"
                         onClick={() => {
-                          void triggerHapticLight();
-                          onChangeVisualizerMode(m.id);
+                          if (visualizerMode !== m.id) {
+                            void triggerHapticMedium();
+                            onChangeVisualizerMode(m.id);
+                          }
                         }}
                         className="sonance-press min-h-[36px] px-3 py-1.5 rounded-xl border text-xs font-medium whitespace-nowrap"
                         style={{
@@ -453,7 +459,10 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                       <button
                         key={lvl}
                         type="button"
-                        onClick={() => onChangePartyIntensity(lvl)}
+                        onClick={() => {
+                          void triggerHapticLight();
+                          onChangePartyIntensity(lvl);
+                        }}
                         className="px-2.5 py-1 rounded-lg text-xs capitalize font-medium"
                         style={{
                           backgroundColor:
@@ -474,7 +483,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      void triggerHapticMedium();
+                      void triggerHapticWarning();
                       onResetTasteProfile();
                       setConfirmReset(false);
                     }}

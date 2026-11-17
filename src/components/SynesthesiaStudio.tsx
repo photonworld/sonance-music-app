@@ -35,6 +35,14 @@ import {
 import { getActiveLyricLine, parseLyrics } from '../synesthesia/lrcParser';
 import { SynesthesiaRenderer } from '../synesthesia/synesthesiaRenderer';
 import {
+  triggerHapticLight,
+  triggerHapticMedium,
+  triggerHapticSelectionChanged,
+  triggerHapticSelectionEnd,
+  triggerHapticSelectionStart,
+  triggerHapticSuccess,
+} from '../utils/haptics';
+import {
   AcousticFossil,
   DemoJourney,
   SyncedLyricLine,
@@ -565,7 +573,10 @@ export const SynesthesiaStudio: React.FC<SynesthesiaStudioProps> = ({
               <button
                 key={journey.id}
                 type="button"
-                onClick={() => handleSelectDemoJourney(journey, true)}
+                onClick={() => {
+                  void triggerHapticMedium();
+                  handleSelectDemoJourney(journey, true);
+                }}
                 className="sonance-press min-h-[38px] px-3.5 py-1.5 rounded-xl border text-xs font-semibold whitespace-nowrap shrink-0"
                 style={{
                   backgroundColor: active
@@ -675,7 +686,10 @@ export const SynesthesiaStudio: React.FC<SynesthesiaStudioProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => setActivePanel((p) => (p === 'upload' ? 'none' : 'upload'))}
+              onClick={() => {
+                void triggerHapticLight();
+                setActivePanel((p) => (p === 'upload' ? 'none' : 'upload'));
+              }}
               className="sonance-press min-h-[40px] inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-black/45 hover:bg-black/65 backdrop-blur-md border border-white/15 text-xs font-semibold text-white whitespace-nowrap shrink-0"
             >
               <Upload className="w-3.5 h-3.5 text-sky-400" />
@@ -684,7 +698,10 @@ export const SynesthesiaStudio: React.FC<SynesthesiaStudioProps> = ({
 
             <button
               type="button"
-              onClick={() => setActivePanel((p) => (p === 'inspector' ? 'none' : 'inspector'))}
+              onClick={() => {
+                void triggerHapticLight();
+                setActivePanel((p) => (p === 'inspector' ? 'none' : 'inspector'));
+              }}
               className={`sonance-press min-h-[40px] inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl backdrop-blur-md border text-xs font-semibold text-white whitespace-nowrap shrink-0 ${
                 activePanel === 'inspector'
                   ? 'bg-sky-500/80 border-sky-300/60'
@@ -697,7 +714,10 @@ export const SynesthesiaStudio: React.FC<SynesthesiaStudioProps> = ({
 
             <button
               type="button"
-              onClick={() => setActivePanel((p) => (p === 'gallery' ? 'none' : 'gallery'))}
+              onClick={() => {
+                void triggerHapticLight();
+                setActivePanel((p) => (p === 'gallery' ? 'none' : 'gallery'));
+              }}
               className={`sonance-press min-h-[40px] inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl backdrop-blur-md border text-xs font-semibold text-white whitespace-nowrap shrink-0 ${
                 activePanel === 'gallery'
                   ? 'bg-amber-500/80 border-amber-300/60'
@@ -710,7 +730,10 @@ export const SynesthesiaStudio: React.FC<SynesthesiaStudioProps> = ({
 
             <button
               type="button"
-              onClick={() => void handleToggleFullscreen()}
+              onClick={() => {
+                void triggerHapticLight();
+                void handleToggleFullscreen();
+              }}
               aria-label={isFullscreen ? 'Exit fullscreen immersive mode' : 'Enter fullscreen immersive mode'}
               className="sonance-press min-w-[40px] min-h-[40px] inline-flex items-center justify-center rounded-xl bg-black/45 hover:bg-black/65 backdrop-blur-md border border-white/15 text-white shrink-0"
             >
@@ -749,7 +772,14 @@ export const SynesthesiaStudio: React.FC<SynesthesiaStudioProps> = ({
                 max={duration || 1}
                 step={0.2}
                 value={Math.min(currentTime, duration || 1)}
-                onChange={(e) => handleSeek(parseFloat(e.target.value))}
+                onMouseDown={() => void triggerHapticSelectionStart()}
+                onTouchStart={() => void triggerHapticSelectionStart()}
+                onChange={(e) => {
+                  void triggerHapticSelectionChanged(75);
+                  handleSeek(parseFloat(e.target.value));
+                }}
+                onMouseUp={() => void triggerHapticSelectionEnd()}
+                onTouchEnd={() => void triggerHapticSelectionEnd()}
                 aria-label="Synesthesia playback seekbar"
                 className="sonance-slider flex-1"
                 style={{
@@ -772,7 +802,10 @@ export const SynesthesiaStudio: React.FC<SynesthesiaStudioProps> = ({
               <div className="flex items-center gap-3 min-w-0 flex-1">
                 <button
                   type="button"
-                  onClick={() => void handleTogglePlay()}
+                  onClick={() => {
+                    void triggerHapticMedium();
+                    void handleTogglePlay();
+                  }}
                   aria-label={isPlaying ? 'Pause synesthesia playback' : 'Play synesthesia playback'}
                   className="sonance-press w-11 h-11 rounded-full flex items-center justify-center shrink-0 text-slate-950 shadow-lg"
                   style={{ backgroundColor: activePhase.palette[2] }}
@@ -797,7 +830,10 @@ export const SynesthesiaStudio: React.FC<SynesthesiaStudioProps> = ({
               <div className="flex items-center gap-3 shrink-0">
                 <button
                   type="button"
-                  onClick={() => handleCrystallizeSong(false)}
+                  onClick={() => {
+                    void triggerHapticSuccess();
+                    handleCrystallizeSong(false);
+                  }}
                   className="sonance-press inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-[11px] font-semibold text-white whitespace-nowrap shrink-0"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-amber-300" />

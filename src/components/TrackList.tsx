@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   Check,
+  GripVertical,
   Heart,
   ListPlus,
   Music,
@@ -13,7 +14,15 @@ import {
 } from 'lucide-react';
 import { Playlist, Track } from '../types/audio';
 import { formatDuration } from '../utils/audioMetadata';
-import { triggerHapticLight, triggerHapticMedium } from '../utils/haptics';
+import {
+  triggerHapticLight,
+  triggerHapticMedium,
+  triggerHapticSelectionChanged,
+  triggerHapticSelectionEnd,
+  triggerHapticSelectionStart,
+  triggerHapticSuccess,
+  triggerHapticWarning,
+} from '../utils/haptics';
 import { DownloadButton } from './DownloadButton';
 
 export type FormatFilter = 'all' | 'lossless' | 'compressed';
@@ -35,6 +44,7 @@ interface TrackListProps {
   onToggleTrackInPlaylist: (playlistId: string, trackId: string) => void;
   onDeleteTrack: (trackId: string) => void;
   onRemoveFromPlaylist: (playlistId: string, trackId: string) => void;
+  onReorderPlaylistTracks?: (playlistId: string, fromIndex: number, toIndex: number) => void;
   onDownloadTrack?: (track: Track) => void;
   onTriggerImport: () => void;
   onScanDevice: () => void;
@@ -60,6 +70,7 @@ export const TrackList: React.FC<TrackListProps> = ({
   onToggleTrackInPlaylist,
   onDeleteTrack,
   onRemoveFromPlaylist,
+  onReorderPlaylistTracks,
   onDownloadTrack,
   onTriggerImport,
   onScanDevice,
@@ -68,6 +79,13 @@ export const TrackList: React.FC<TrackListProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [formatFilter, setFormatFilter] = useState<FormatFilter>('all');
   const [openMenuTrackId, setOpenMenuTrackId] = useState<string | null>(null);
+  const [draggingTrackId, setDraggingTrackId] = useState<string | null>(null);
+  const [dragOverTrackId, setDragOverTrackId] = useState<string | null>(null);
+
+  const canReorderInList =
+    Boolean(isPlaylistView && activePlaylistId && onReorderPlaylistTracks) &&
+    formatFilter === 'all' &&
+    !searchQuery.trim();
 
   const filtered = tracks.filter((t) => {
     if (formatFilter === 'lossless' && !LOSSLESS_FORMATS.has(t.format)) return false;
@@ -180,7 +198,10 @@ export const TrackList: React.FC<TrackListProps> = ({
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => setFormatFilter(tab.id)}
+                  onClick={() => {
+                    void triggerHapticLight();
+                    setFormatFilter(tab.id);
+                  }}
                   className="px-2.5 py-1.5 text-xs font-medium rounded-md whitespace-nowrap shrink-0 transition-colors"
                   style={{
                     backgroundColor: active ? 'var(--bg-surface)' : 'transparent',
@@ -219,7 +240,10 @@ export const TrackList: React.FC<TrackListProps> = ({
             <button
               type="button"
               disabled={isScanning}
-              onClick={onScanDevice}
+              onClick={() => {
+                void triggerHapticLight();
+                onScanDevice();
+              }}
               className="inline-flex items-center gap-1.5 min-h-[38px] px-3 py-1.5 rounded-lg border text-xs font-medium whitespace-nowrap shrink-0 transition-all duration-150 hover:opacity-85 active:scale-[0.97] disabled:opacity-60"
               style={{
                 backgroundColor: 'var(--bg-surface)',
@@ -253,7 +277,10 @@ export const TrackList: React.FC<TrackListProps> = ({
           {tracks.length === 0 && !isPlaylistView && (
             <button
               type="button"
-              onClick={onTriggerImport}
+              onClick={() => {
+                void triggerHapticLight();
+                onTriggerImport();
+              }}
               className="mt-4 px-4 py-2 rounded-lg text-xs font-medium"
               style={{
                 backgroundColor: 'var(--accent-primary)',
@@ -269,18 +296,73 @@ export const TrackList: React.FC<TrackListProps> = ({
           {filtered.map((track, idx) => {
             const isCurrent = track.id === currentTrackId;
             const menuOpen = openMenuTrackId === track.id;
+            const isDragging = draggingTrackId === track.id;
+            const isDragTarget = dragOverTrackId === track.id && draggingTrackId !== track.id;
 
             return (
               <div
                 key={track.id}
-                className="group relative flex items-center gap-3 py-2.5 px-2.5 rounded-xl transition-colors"
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('application/x-sonance-track', track.id);
+                  e.dataTransfer.setData('text/plain', track.id);
+                  e.dataTransfer.effectAllowed = canReorderInList ? 'copyMove' : 'copy';
+                  setDraggingTrackId(track.id);
+                  void triggerHapticSelectionStart();
+                }}
+                onDragOver={(e) => {
+                  if (!canReorderInList || !draggingTrackId || draggingTrackId === track.id) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  if (dragOverTrackId !== track.id) {
+                    setDragOverTrackId(track.id);
+                    void triggerHapticSelectionChanged();
+                  }
+                }}
+                onDragLeave={() => {
+                  setDragOverTrackId((prev) => (prev === track.id ? null : prev));
+                }}
+                onDrop={(e) => {
+                  if (!canReorderInList || !activePlaylistId || !onReorderPlaylistTracks) return;
+                  const sourceTrackId = e.dataTransfer.getData('application/x-sonance-track') || draggingTrackId;
+                  if (!sourceTrackId || sourceTrackId === track.id) return;
+                  e.preventDefault();
+                  const fromIdx = filtered.findIndex((t) => t.id === sourceTrackId);
+                  if (fromIdx !== -1 && fromIdx !== idx) {
+                    onReorderPlaylistTracks(activePlaylistId, fromIdx, idx);
+                    void triggerHapticSuccess();
+                  }
+                  setDragOverTrackId(null);
+                  setDraggingTrackId(null);
+                  void triggerHapticSelectionEnd();
+                }}
+                onDragEnd={() => {
+                  setDraggingTrackId(null);
+                  setDragOverTrackId(null);
+                  void triggerHapticSelectionEnd();
+                }}
+                className={`group relative flex items-center gap-3 py-2.5 px-2.5 rounded-xl transition-all ${
+                  isDragging ? 'opacity-50 scale-[0.99]' : ''
+                }`}
                 style={{
-                  backgroundColor: isCurrent
-                    ? 'color-mix(in srgb, var(--bg-elevated) 78%, transparent)'
-                    : 'transparent',
-                  borderColor: 'var(--border-hairline)',
+                  backgroundColor: isDragTarget
+                    ? 'color-mix(in srgb, var(--accent-primary) 14%, var(--bg-elevated))'
+                    : isCurrent
+                      ? 'color-mix(in srgb, var(--bg-elevated) 78%, transparent)'
+                      : 'transparent',
+                  borderColor: isDragTarget ? 'var(--accent-primary)' : 'var(--border-hairline)',
+                  boxShadow: isDragTarget ? 'inset 0 2px 0 var(--accent-primary)' : undefined,
                 }}
               >
+                <span
+                  aria-hidden="true"
+                  title={canReorderInList ? 'Drag to reorder or add to playlist' : 'Drag onto a playlist'}
+                  className="hidden sm:flex items-center justify-center w-4 shrink-0 cursor-grab active:cursor-grabbing opacity-35 group-hover:opacity-80 transition-opacity"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  <GripVertical className="w-3.5 h-3.5" />
+                </span>
+
                 {/* Index / Play toggle */}
                 <button
                   type="button"
@@ -313,7 +395,10 @@ export const TrackList: React.FC<TrackListProps> = ({
                 {/* Artwork miniature */}
                 <button
                   type="button"
-                  onClick={() => onPlayTrack(track.id)}
+                  onClick={() => {
+                    void triggerHapticLight();
+                    onPlayTrack(track.id);
+                  }}
                   className="w-10 h-10 rounded-lg overflow-hidden shrink-0 border flex items-center justify-center"
                   style={{
                     backgroundColor: 'var(--bg-surface)',
@@ -335,7 +420,10 @@ export const TrackList: React.FC<TrackListProps> = ({
                 {/* Title & Artist */}
                 <button
                   type="button"
-                  onClick={() => onPlayTrack(track.id)}
+                  onClick={() => {
+                    void triggerHapticLight();
+                    onPlayTrack(track.id);
+                  }}
                   className="flex-1 min-w-0 text-left"
                 >
                   <p
@@ -377,6 +465,7 @@ export const TrackList: React.FC<TrackListProps> = ({
                       trackTitle={track.title}
                       onDownload={(e) => {
                         e.stopPropagation();
+                        void triggerHapticLight();
                         onDownloadTrack(track);
                       }}
                     />
@@ -405,7 +494,10 @@ export const TrackList: React.FC<TrackListProps> = ({
                   <div className="relative">
                     <button
                       type="button"
-                      onClick={() => setOpenMenuTrackId(menuOpen ? null : track.id)}
+                      onClick={() => {
+                        void triggerHapticLight();
+                        setOpenMenuTrackId(menuOpen ? null : track.id);
+                      }}
                       aria-label="Add to playlist"
                       className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg transition-opacity hover:opacity-75"
                       style={{ color: 'var(--text-muted)' }}
@@ -442,6 +534,11 @@ export const TrackList: React.FC<TrackListProps> = ({
                                 key={pl.id}
                                 type="button"
                                 onClick={() => {
+                                  if (inList) {
+                                    void triggerHapticLight();
+                                  } else {
+                                    void triggerHapticSuccess();
+                                  }
                                   onToggleTrackInPlaylist(pl.id, track.id);
                                   setOpenMenuTrackId(null);
                                 }}
@@ -466,7 +563,10 @@ export const TrackList: React.FC<TrackListProps> = ({
                   {isPlaylistView && activePlaylistId ? (
                     <button
                       type="button"
-                      onClick={() => onRemoveFromPlaylist(activePlaylistId, track.id)}
+                      onClick={() => {
+                        void triggerHapticWarning();
+                        onRemoveFromPlaylist(activePlaylistId, track.id);
+                      }}
                       aria-label={`Remove ${track.title} from playlist`}
                       className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg transition-opacity hover:opacity-75"
                       style={{ color: 'var(--text-muted)' }}
@@ -476,7 +576,10 @@ export const TrackList: React.FC<TrackListProps> = ({
                   ) : (
                     <button
                       type="button"
-                      onClick={() => onDeleteTrack(track.id)}
+                      onClick={() => {
+                        void triggerHapticWarning();
+                        onDeleteTrack(track.id);
+                      }}
                       aria-label={`Delete ${track.title}`}
                       className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg transition-opacity hover:opacity-75"
                       style={{ color: 'var(--text-muted)' }}
