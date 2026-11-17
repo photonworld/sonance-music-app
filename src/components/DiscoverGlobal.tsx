@@ -83,6 +83,7 @@ interface DiscoverGlobalProps {
   onDislikeAndSkip: (track: Track) => void;
   onDownloadTrack: (track: Track) => void;
   onSuggestVisualizer?: (style: ConcreteVisualizerStyle) => void;
+  onTracksLoaded?: (tracks: Track[], seed?: StreamSeedContext) => void;
 }
 
 const REGION_OPTIONS = [
@@ -374,6 +375,7 @@ export const DiscoverGlobal: React.FC<DiscoverGlobalProps> = ({
   onDislikeAndSkip,
   onDownloadTrack,
   onSuggestVisualizer,
+  onTracksLoaded,
 }) => {
   const [selectedCountry, setSelectedCountry] = useState('AUTO');
   const [searchQuery, setSearchQuery] = useState('');
@@ -411,6 +413,10 @@ export const DiscoverGlobal: React.FC<DiscoverGlobalProps> = ({
   onMoodHintChangeRef.current = onMoodHintChange;
   const onSynthPlanChangeRef = useRef(onSynthPlanChange);
   onSynthPlanChangeRef.current = onSynthPlanChange;
+  const onTracksLoadedRef = useRef(onTracksLoaded);
+  onTracksLoadedRef.current = onTracksLoaded;
+  const aiPlanRef = useRef(aiPlan);
+  aiPlanRef.current = aiPlan;
   const dislikedIdsRef = useRef(dislikedIds);
   dislikedIdsRef.current = dislikedIds;
 
@@ -656,27 +662,32 @@ export const DiscoverGlobal: React.FC<DiscoverGlobalProps> = ({
           setStreamError(audJson.error || 'No matching streams returned.');
         }
 
+        const playableBatch = incoming
+          .map(audiusToTrack)
+          .filter((t) => !dislikedIdsRef.current.has(t.id) && Boolean(t.streamUrl));
+        const batchSeed: StreamSeedContext = {
+          query: opts.q,
+          genre: opts.genre,
+          mood: opts.mood,
+          tags: opts.tags,
+          sort: opts.sort || 'popular',
+          mode: opts.q || opts.mood || opts.tags ? 'search' : 'trending',
+          offset: resolvedOffset,
+          targetBpmMin: opts.bpmMin,
+          targetBpmMax: opts.bpmMax,
+          harmonicTarget: opts.harmonicTarget,
+        };
+
+        if (playableBatch.length > 0 && !isAppend) {
+          onTracksLoadedRef.current?.(playableBatch, batchSeed);
+        }
+
         if (opts.autoPlayOnLoad) {
-          const playable = incoming
-            .map(audiusToTrack)
-            .filter((t) => !dislikedIdsRef.current.has(t.id) && Boolean(t.streamUrl));
-          if (playable.length > 0) {
-            const seed: StreamSeedContext = {
-              query: opts.q,
-              genre: opts.genre,
-              mood: opts.mood,
-              tags: opts.tags,
-              sort: opts.sort || 'popular',
-              mode: opts.q || opts.mood || opts.tags ? 'search' : 'trending',
-              offset: resolvedOffset,
-              targetBpmMin: opts.bpmMin,
-              targetBpmMax: opts.bpmMax,
-              harmonicTarget: opts.harmonicTarget,
-            };
+          if (playableBatch.length > 0) {
             onPlayExternalQueueRef.current(
-              playable,
+              playableBatch,
               Boolean(opts.shuffleOnLoad),
-              seed,
+              batchSeed,
               opts.crossfadeOnLoad ? { crossfade: true, crossfadeMs: 2200 } : undefined
             );
             if (opts.channelIdForLoad) {
@@ -964,47 +975,46 @@ export const DiscoverGlobal: React.FC<DiscoverGlobalProps> = ({
       const bpmMax = Math.min(186, nextBpm + 12);
 
       // Update live synthesizer plan & downstream 3D Quantum Visualizer + Audio Engine immediately
-      setAiPlan((prev) => {
-        const updated: AIMoodPlan = prev
-          ? {
-              ...prev,
-              targetBpmMin: bpmMin,
-              targetBpmMax: bpmMax,
-              harmonicIntensity: nextHarmonic,
-            }
-          : {
-              moodTitle: `${nextBpm} BPM Harmonic Synthesis`,
-              emotionalState: activeEmotionalState || 'Custom Tempo',
-              rationale: `Real-time acoustic lock at ${nextBpm} BPM and ${Math.round(
-                nextHarmonic * 100
-              )}% harmonic intensity.`,
-              targetBpmMin: bpmMin,
-              targetBpmMax: bpmMax,
-              harmonicIntensity: nextHarmonic,
-              recommendedGenres:
-                nextBpm >= 124
-                  ? ['Electronic', 'House', 'Techno']
-                  : nextBpm <= 82
-                    ? ['Ambient', 'Acoustic', 'Lo-Fi']
-                    : ['Synthwave', 'Chillhop', 'Indie'],
-              radioTags: [nextBpm >= 124 ? 'electronic' : nextBpm <= 82 ? 'ambient' : 'lofi'],
-              audiusQueries: [
-                nextBpm >= 124
-                  ? 'electronic house bass'
-                  : nextBpm <= 82
-                    ? 'ambient piano lofi'
-                    : 'synthwave chillhop',
-              ],
-              visualizerStyle:
-                nextBpm >= 124 ? 'spectrum' : nextBpm <= 82 ? 'radial' : 'kinetic',
-              quantumMode: nextHarmonic >= 0.72 ? 'nebula' : nextBpm <= 82 ? 'neural' : 'quantum',
-              moodEnvironment:
-                nextBpm >= 126 ? 'energy' : nextBpm <= 80 ? 'rain' : 'aurora',
-              curationSource: 'acoustic-engine',
-            };
-        onSynthPlanChangeRef.current?.(updated);
-        return updated;
-      });
+      const prevPlan = aiPlanRef.current;
+      const updatedPlan: AIMoodPlan = prevPlan
+        ? {
+            ...prevPlan,
+            targetBpmMin: bpmMin,
+            targetBpmMax: bpmMax,
+            harmonicIntensity: nextHarmonic,
+          }
+        : {
+            moodTitle: `${nextBpm} BPM Harmonic Synthesis`,
+            emotionalState: activeEmotionalState || 'Custom Tempo',
+            rationale: `Real-time acoustic lock at ${nextBpm} BPM and ${Math.round(
+              nextHarmonic * 100
+            )}% harmonic intensity.`,
+            targetBpmMin: bpmMin,
+            targetBpmMax: bpmMax,
+            harmonicIntensity: nextHarmonic,
+            recommendedGenres:
+              nextBpm >= 124
+                ? ['Electronic', 'House', 'Techno']
+                : nextBpm <= 82
+                  ? ['Ambient', 'Acoustic', 'Lo-Fi']
+                  : ['Synthwave', 'Chillhop', 'Indie'],
+            radioTags: [nextBpm >= 124 ? 'electronic' : nextBpm <= 82 ? 'ambient' : 'lofi'],
+            audiusQueries: [
+              nextBpm >= 124
+                ? 'electronic house bass'
+                : nextBpm <= 82
+                  ? 'ambient piano lofi'
+                  : 'synthwave chillhop',
+            ],
+            visualizerStyle:
+              nextBpm >= 124 ? 'spectrum' : nextBpm <= 82 ? 'radial' : 'kinetic',
+            quantumMode: nextHarmonic >= 0.72 ? 'nebula' : nextBpm <= 82 ? 'neural' : 'quantum',
+            moodEnvironment:
+              nextBpm >= 126 ? 'energy' : nextBpm <= 80 ? 'rain' : 'aurora',
+            curationSource: 'acoustic-engine',
+          };
+      setAiPlan(updatedPlan);
+      onSynthPlanChangeRef.current?.(updatedPlan);
 
       // Check how many loaded tracks already fit inside the target BPM window
       const inWindow = audiusTracks.filter(

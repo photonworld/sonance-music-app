@@ -104,6 +104,8 @@ export function useAudioEngine({
   const crossfadeRafRef = useRef<number>(0);
   const crossfadeTokenRef = useRef<number>(0);
   const crossfadingRef = useRef<boolean>(false);
+  const transitionBpmRef = useRef<number | null>(null);
+  const crossfadeProgressRef = useRef<number | null>(null);
 
   const synthBpmRef = useRef<number | null>(synthTargetBpm ?? null);
   synthBpmRef.current = synthTargetBpm ?? null;
@@ -123,6 +125,7 @@ export function useAudioEngine({
   const [externalActiveTrack, setExternalActiveTrack] = useState<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isCrossfading, setIsCrossfading] = useState(false);
+  const [transitionBpm, setTransitionBpm] = useState<number | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolumeState] = useState(0.85);
@@ -170,6 +173,8 @@ export function useAudioEngine({
     isBeat: false,
     spectralCentroid: 0.4,
     estimatedBpm: null,
+    transitionTempoBpm: null,
+    crossfadeProgress: null,
   });
 
   const beatStateRef = useRef({
@@ -531,7 +536,12 @@ export function useAudioEngine({
             crossfadeRafRef.current = 0;
           }
           crossfadingRef.current = false;
+          transitionBpmRef.current = null;
+          crossfadeProgressRef.current = null;
+          analysisFrameRef.current.transitionTempoBpm = null;
+          analysisFrameRef.current.crossfadeProgress = null;
           setIsCrossfading(false);
+          setTransitionBpm(null);
           stopInactiveDeck(targetDeck === 'A' ? 'B' : 'A');
 
           if (targetDeckGain && audioCtxRef.current) {
@@ -565,6 +575,15 @@ export function useAudioEngine({
           return;
         }
 
+        // Capture outgoing & incoming BPMs BEFORE updating currentTrackId so transition tempo interpolates accurately
+        const outgoingTrackSnapshot = currentTrackRef.current;
+        const outgoingBpm =
+          outgoingTrackSnapshot?.bpm ||
+          analysisFrameRef.current.estimatedBpm ||
+          synthBpmRef.current ||
+          108;
+        const incomingBpm = track.bpm || synthBpmRef.current || outgoingBpm;
+
         // Dual-Audio Equal-Power Crossfade: keep outgoing deck uninterrupted while incoming starts
         if (targetDeckGain && audioCtxRef.current) {
           targetDeckGain.gain.setValueAtTime(0, audioCtxRef.current.currentTime);
@@ -586,7 +605,12 @@ export function useAudioEngine({
 
         activeDeckRef.current = targetDeck;
         crossfadingRef.current = true;
+        transitionBpmRef.current = outgoingBpm;
+        crossfadeProgressRef.current = 0;
+        analysisFrameRef.current.transitionTempoBpm = outgoingBpm;
+        analysisFrameRef.current.crossfadeProgress = 0;
         setIsCrossfading(true);
+        setTransitionBpm(Math.round(outgoingBpm));
         consecutiveErrorsRef.current = 0;
 
         if (overrideTrack) {
@@ -605,10 +629,27 @@ export function useAudioEngine({
 
         const fadeMs = Math.max(800, Math.min(4000, options?.crossfadeMs ?? 2200));
         const fadeStart = performance.now();
+        let lastReportedIntBpm = Math.round(outgoingBpm);
 
         const stepCrossfade = (now: number) => {
           if (crossfadeTokenRef.current !== myToken) return;
           const progress = Math.min(1, (now - fadeStart) / fadeMs);
+          // Smooth S-curve (equal-power) tempo interpolation from outgoingBpm -> incomingBpm
+          const easedTempoProgress = 0.5 - 0.5 * Math.cos(progress * Math.PI);
+          const currentTransitionBpm =
+            Math.round((outgoingBpm + (incomingBpm - outgoingBpm) * easedTempoProgress) * 10) / 10;
+
+          transitionBpmRef.current = currentTransitionBpm;
+          crossfadeProgressRef.current = progress;
+          analysisFrameRef.current.transitionTempoBpm = currentTransitionBpm;
+          analysisFrameRef.current.crossfadeProgress = progress;
+
+          const roundedIntBpm = Math.round(currentTransitionBpm);
+          if (roundedIntBpm !== lastReportedIntBpm) {
+            lastReportedIntBpm = roundedIntBpm;
+            setTransitionBpm(roundedIntBpm);
+          }
+
           const inGain = Math.sin(progress * Math.PI * 0.5);
           const outGain = Math.cos(progress * Math.PI * 0.5);
           const ctx = audioCtxRef.current;
@@ -626,7 +667,12 @@ export function useAudioEngine({
           } else {
             crossfadeRafRef.current = 0;
             crossfadingRef.current = false;
+            transitionBpmRef.current = null;
+            crossfadeProgressRef.current = null;
+            analysisFrameRef.current.transitionTempoBpm = null;
+            analysisFrameRef.current.crossfadeProgress = null;
             setIsCrossfading(false);
+            setTransitionBpm(null);
             if (ctx && targetDeckGain) {
               targetDeckGain.gain.setValueAtTime(1, ctx.currentTime);
             }
@@ -888,10 +934,9 @@ export function useAudioEngine({
       enableShuffle: boolean | 'preserve' = false,
       overrideTracks?: Track[],
       sourceOverride?: PlaybackSource,
-      options?: { crossfade?: boolean; crossfadeMs?: number }
+      options?: { crossfade?: boolean; crossfadeMs?: number; autoPlay?: boolean }
     ) => {
       if (queueIds.length === 0) return;
-
       if (overrideTracks) {
         for (const t of overrideTracks) {
           ephemeralTracksRef.current.set(t.id, t);
@@ -928,14 +973,16 @@ export function useAudioEngine({
         setShuffleState(enableShuffle);
       }
 
+      const shouldAutoPlay = options?.autoPlay ?? true;
+
       if (shouldShuffle) {
         const shuffled = fisherYatesShuffle(queueIds, startTrackId);
         shuffledQueueRef.current = shuffled;
         const firstId = startTrackId ?? shuffled[0];
-        await loadAndPlayTrack(firstId, true, undefined, resolvedSource, queueIds, options);
+        await loadAndPlayTrack(firstId, shouldAutoPlay, undefined, resolvedSource, queueIds, options);
       } else {
         const firstId = startTrackId ?? queueIds[0];
-        await loadAndPlayTrack(firstId, true, undefined, resolvedSource, queueIds, options);
+        await loadAndPlayTrack(firstId, shouldAutoPlay, undefined, resolvedSource, queueIds, options);
       }
     },
     [loadAndPlayTrack, tracks]
@@ -1202,6 +1249,12 @@ export function useAudioEngine({
         const audioEl = activeDeckRef.current === 'A' ? deckARef.current : deckBRef.current;
         const audioActivelyPlaying = Boolean(audioEl && !audioEl.paused && !audioEl.ended);
 
+        if (audioActivelyPlaying && magSum <= 0.015) {
+          // keep below fallback branch intact
+        }
+        frame.transitionTempoBpm = transitionBpmRef.current;
+        frame.crossfadeProgress = crossfadeProgressRef.current;
+
         if (magSum > 0.015) {
           bState.silentFrames = 0;
 
@@ -1255,6 +1308,7 @@ export function useAudioEngine({
             const activeTrack = currentTrackRef.current;
             const genreStr = `${activeTrack?.genre ?? ''} ${activeTrack?.title ?? ''}`.toLowerCase();
             const inferredBpm =
+              transitionBpmRef.current ||
               activeTrack?.bpm ||
               synthBpmRef.current ||
               (/workout|phonk|edm|dance|techno|house|bass|club/.test(genreStr)
@@ -1520,6 +1574,7 @@ export function useAudioEngine({
     currentTrackId,
     isPlaying,
     isCrossfading,
+    transitionBpm,
     currentTime,
     duration,
     volume,

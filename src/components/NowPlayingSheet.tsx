@@ -44,6 +44,7 @@ import {
   MoodEnvironmentType,
 } from './MoodEnvironmentBackdrop';
 import { QuantumVisualizer3D } from './QuantumVisualizer3D';
+import { SonanceLogo3D } from './SonanceLogo3D';
 
 interface NowPlayingSheetProps {
   open: boolean;
@@ -73,6 +74,7 @@ interface NowPlayingSheetProps {
   moodEnvironment?: MoodEnvironmentType;
   synthPlan?: AIMoodPlan | null;
   isCrossfading?: boolean;
+  transitionBpm?: number | null;
   analysisFrameRef: React.MutableRefObject<AudioAnalysisFrame>;
   onTogglePlayPause: () => void;
   onPrevious: () => void;
@@ -109,6 +111,13 @@ const QUANTUM_VIS_MODES: Array<{ id: QuantumVisualizerMode; label: string }> = [
   { id: 'neural', label: 'AI Neural Symphony' },
   { id: 'nebula', label: 'Nebula Warp' },
   { id: 'bars', label: 'Classic Pro Bars' },
+  { id: 'cybergrid', label: 'Cyber Horizon' },
+  { id: 'vortex', label: 'Tornado Vortex' },
+  { id: 'sacred', label: 'Sacred Mandala' },
+  { id: 'lantern', label: 'Sufi Lanterns' },
+  { id: 'monsoon3d', label: 'Monsoon Storm' },
+  { id: 'geometricflow', label: 'Geometric Flow' },
+  { id: 'glitchshift', label: 'Glitch Shift' },
 ];
 
 type SheetDrawer = 'none' | 'eq' | 'sleep';
@@ -141,6 +150,7 @@ export const NowPlayingSheet: React.FC<NowPlayingSheetProps> = ({
   moodEnvironment = 'aurora',
   synthPlan = null,
   isCrossfading = false,
+  transitionBpm = null,
   analysisFrameRef,
   onTogglePlayPause,
   onPrevious,
@@ -165,7 +175,19 @@ export const NowPlayingSheet: React.FC<NowPlayingSheetProps> = ({
   const [stageMode, setStageMode] = useState<'artwork' | 'visualizer'>('artwork');
   const [quantumMode, setQuantumMode] = useState<QuantumVisualizerMode>(() => {
     const saved = localStorage.getItem('sonance-quantum-vis');
-    if (saved === 'quantum' || saved === 'neural' || saved === 'nebula' || saved === 'bars') {
+    if (
+      saved === 'quantum' ||
+      saved === 'neural' ||
+      saved === 'nebula' ||
+      saved === 'bars' ||
+      saved === 'cybergrid' ||
+      saved === 'vortex' ||
+      saved === 'sacred' ||
+      saved === 'lantern' ||
+      saved === 'monsoon3d' ||
+      saved === 'geometricflow' ||
+      saved === 'glitchshift'
+    ) {
       return saved;
     }
     return 'quantum';
@@ -186,7 +208,14 @@ export const NowPlayingSheet: React.FC<NowPlayingSheetProps> = ({
       synthPlan?.quantumMode === 'quantum' ||
       synthPlan?.quantumMode === 'neural' ||
       synthPlan?.quantumMode === 'nebula' ||
-      synthPlan?.quantumMode === 'bars'
+      synthPlan?.quantumMode === 'bars' ||
+      synthPlan?.quantumMode === 'cybergrid' ||
+      synthPlan?.quantumMode === 'vortex' ||
+      synthPlan?.quantumMode === 'sacred' ||
+      synthPlan?.quantumMode === 'lantern' ||
+      synthPlan?.quantumMode === 'monsoon3d' ||
+      synthPlan?.quantumMode === 'geometricflow' ||
+      synthPlan?.quantumMode === 'glitchshift'
     ) {
       setQuantumMode(synthPlan.quantumMode);
     }
@@ -389,7 +418,12 @@ export const NowPlayingSheet: React.FC<NowPlayingSheetProps> = ({
               ) : currentTrack?.isLive ? (
                 <Radio className="w-16 h-16" style={{ color: 'var(--accent-primary)' }} />
               ) : (
-                <Music className="w-16 h-16" style={{ color: 'var(--text-muted)' }} />
+                <SonanceLogo3D
+                  size="xl"
+                  isPlaying={isPlaying}
+                  interactive
+                  animateFloat
+                />
               )}
             </div>
           ) : (
@@ -414,15 +448,17 @@ export const NowPlayingSheet: React.FC<NowPlayingSheetProps> = ({
                       : null
                   }
                   synthHarmonicIntensity={synthPlan?.harmonicIntensity ?? null}
+                  transitionBpm={transitionBpm}
+                  isCrossfading={isCrossfading}
                   analysisFrameRef={analysisFrameRef}
                 />
               </div>
 
-              {/* Sleek 4-Mode Selector Pill below the 3D Visualizer */}
+              {/* Sleek 9-Mode Selector Bar below the 3D Visualizer */}
               <div
                 role="tablist"
                 aria-label="3D Visualizer modes"
-                className="inline-flex flex-wrap items-center justify-center gap-1 p-1 rounded-full border bg-white/55 dark:bg-zinc-950/60 backdrop-blur-md"
+                className="inline-flex flex-wrap items-center justify-center gap-1 p-1.5 rounded-2xl border bg-white/55 dark:bg-zinc-950/60 backdrop-blur-md"
                 style={{ borderColor: 'var(--border-hairline)' }}
               >
                 {QUANTUM_VIS_MODES.map((m) => {
@@ -505,7 +541,13 @@ export const NowPlayingSheet: React.FC<NowPlayingSheetProps> = ({
                 >
                   {currentTrack.genre} · {currentTrack.format}
                   {currentTrack.bitrate ? ` · ${currentTrack.bitrate} kbps` : ''}
-                  {liveBpm ? ` · ${liveBpm} BPM` : currentTrack.bpm ? ` · ${currentTrack.bpm} BPM` : ''}
+                  {isCrossfading && transitionBpm
+                    ? ` · ${transitionBpm} BPM (Transition)`
+                    : liveBpm
+                      ? ` · ${liveBpm} BPM`
+                      : currentTrack.bpm
+                        ? ` · ${currentTrack.bpm} BPM`
+                        : ''}
                   {isCrossfading
                     ? ' · Crossfading'
                     : synthPlan

@@ -11,6 +11,7 @@ import {
   ThumbsDown,
   Upload,
   User,
+  Wand2,
 } from 'lucide-react';
 import { AmbientBackdrop } from './components/AmbientBackdrop';
 import { AudioVisualizer } from './components/AudioVisualizer';
@@ -28,7 +29,9 @@ import { PlayerDock } from './components/PlayerDock';
 import { ProfileSettingsModal } from './components/ProfileSettingsModal';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { LibraryFilter, Sidebar } from './components/Sidebar';
+import { SonanceLogo3D } from './components/SonanceLogo3D';
 import { StreamRowSkeleton } from './components/SkeletonLoaders';
+import { SynesthesiaStudio } from './components/SynesthesiaStudio';
 import { ThemePicker } from './components/ThemePicker';
 import { TrackList } from './components/TrackList';
 import { WorldRadioMap } from './components/WorldRadioMap';
@@ -84,6 +87,14 @@ const VISUALIZER_MODES: Array<{ id: VisualizerMode; label: string }> = [
   { id: 'radial', label: 'Radial' },
   { id: 'analog', label: 'Analog VU' },
   { id: 'kinetic', label: 'Kinetic' },
+  { id: 'aurora', label: 'Aurora Silk' },
+  { id: 'cymatics', label: 'Cymatics' },
+  { id: 'orbit', label: 'Solar Orbit' },
+  { id: 'liquid', label: 'Liquid Mirror' },
+  { id: 'monsoon', label: 'Monsoon Ink' },
+  { id: 'dna', label: 'Helix DNA' },
+  { id: 'geometric', label: 'Geometric Flow' },
+  { id: 'glitch', label: 'Glitch Shift' },
 ];
 
 const STYLE_LABELS: Record<ConcreteVisualizerStyle, string> = {
@@ -92,6 +103,14 @@ const STYLE_LABELS: Record<ConcreteVisualizerStyle, string> = {
   radial: 'Radial Pulse',
   analog: 'Analog VU',
   kinetic: 'Kinetic Field',
+  aurora: 'Aurora Silk',
+  cymatics: 'Cymatics Mandala',
+  orbit: 'Solar Orbit',
+  liquid: 'Liquid Mirror',
+  monsoon: 'Monsoon Ink',
+  dna: 'Helix DNA',
+  geometric: 'Geometric Flow',
+  glitch: 'Glitch Shift',
 };
 
 type TopTab = 'streaming' | 'offline' | 'radio';
@@ -416,6 +435,41 @@ export default function App() {
       void engine.loadAndPlayTrack(tracks[0].id, false, undefined, 'offline', tracks);
     }
   }, [engine, tracks]);
+
+  // Per-tab player session memory so Online Streaming, Offline Music, and Radio switch the player accordingly
+  const tabSessionsRef = useRef<
+    Partial<Record<TopTab, { track: Track; queue: Track[]; seed?: StreamSeedContext }>>
+  >({});
+  const readyOnlinePoolRef = useRef<{ tracks: Track[]; seed?: StreamSeedContext } | null>(null);
+  const readyRadioPoolRef = useRef<Track[] | null>(null);
+  const tabSwitchPlayingIntentRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    if (!engine.currentTrack) return;
+    const sourceTab: TopTab =
+      engine.activePlaybackSource === 'radio'
+        ? 'radio'
+        : engine.activePlaybackSource === 'online'
+          ? 'streaming'
+          : 'offline';
+    const existing = tabSessionsRef.current[sourceTab];
+    const fallbackQueue =
+      sourceTab === 'offline'
+        ? visibleTracks.length > 0
+          ? visibleTracks
+          : tracks
+        : sourceTab === 'streaming'
+          ? readyOnlinePoolRef.current?.tracks ?? [engine.currentTrack]
+          : readyRadioPoolRef.current ?? [engine.currentTrack];
+    tabSessionsRef.current[sourceTab] = {
+      track: engine.currentTrack,
+      queue:
+        existing?.queue && existing.queue.some((t) => t.id === engine.currentTrack?.id)
+          ? existing.queue
+          : fallbackQueue,
+      seed: sourceTab === 'streaming' ? streamSeedRef.current : undefined,
+    };
+  }, [engine.activePlaybackSource, engine.currentTrack, tracks, visibleTracks]);
 
   // Record listening history events whenever a new track begins playing
   useEffect(() => {
@@ -959,11 +1013,111 @@ export default function App() {
     [effectiveMoodHint, currentTrack]
   );
 
+  const activeTopTabRef = useRef<TopTab>(activeTopTab);
+  activeTopTabRef.current = activeTopTab;
+
+  const syncPlayerToTab = useCallback(
+    (targetTab: TopTab, autoPlay: boolean) => {
+      if (targetTab === 'offline') {
+        if (engine.activePlaybackSource === 'offline' && engine.currentTrackId) return;
+        const session = tabSessionsRef.current.offline;
+        const pool = visibleTracks.length > 0 ? visibleTracks : tracks;
+        const targetTrack =
+          (session && tracks.find((t) => t.id === session.track.id)) ?? pool[0];
+        if (!targetTrack) return;
+        const queue =
+          session?.queue && session.queue.length > 0 && session.queue.some((t) => t.id === targetTrack.id)
+            ? session.queue
+            : pool.length > 0
+              ? pool
+              : [targetTrack];
+        const ext = queue.filter((t) => Boolean(t.streamUrl));
+        void engine.playQueue(
+          queue.map((t) => t.id),
+          targetTrack.id,
+          'preserve',
+          ext.length > 0 ? ext : undefined,
+          'offline',
+          { autoPlay }
+        );
+        return;
+      }
+
+      if (targetTab === 'streaming') {
+        if (engine.activePlaybackSource === 'online' && engine.currentTrackId) return;
+        const session = tabSessionsRef.current.streaming;
+        const pool = readyOnlinePoolRef.current;
+        const targetTrack = session?.track ?? pool?.tracks[0];
+        const queue =
+          session?.queue && session.queue.length > 0
+            ? session.queue
+            : pool?.tracks ?? (targetTrack ? [targetTrack] : []);
+        const seed = session?.seed ?? pool?.seed;
+        if (!targetTrack || queue.length === 0) return;
+        if (seed) {
+          streamSeedRef.current = { ...seed };
+        }
+        void engine.playQueue(
+          queue.map((t) => t.id),
+          targetTrack.id,
+          'preserve',
+          queue,
+          'online',
+          { autoPlay }
+        );
+        return;
+      }
+
+      if (targetTab === 'radio') {
+        if (engine.activePlaybackSource === 'radio' && engine.currentTrackId) return;
+        const session = tabSessionsRef.current.radio;
+        const pool = readyRadioPoolRef.current;
+        const targetTrack = session?.track ?? pool?.[0];
+        const queue =
+          session?.queue && session.queue.length > 0
+            ? session.queue
+            : pool ?? (targetTrack ? [targetTrack] : []);
+        if (!targetTrack || queue.length === 0) return;
+        void engine.playQueue(
+          queue.map((t) => t.id),
+          targetTrack.id,
+          false,
+          queue,
+          'radio',
+          { autoPlay }
+        );
+      }
+    },
+    [engine.activePlaybackSource, engine.currentTrackId, engine.playQueue, tracks, visibleTracks]
+  );
+
+  const handleOnlineTracksLoaded = useCallback(
+    (loadedTracks: Track[], seed?: StreamSeedContext) => {
+      if (loadedTracks.length === 0) return;
+      readyOnlinePoolRef.current = { tracks: loadedTracks, seed };
+      if (activeTopTabRef.current === 'streaming' && engine.activePlaybackSource !== 'online') {
+        syncPlayerToTab('streaming', tabSwitchPlayingIntentRef.current || engine.isPlaying);
+      }
+    },
+    [engine.activePlaybackSource, engine.isPlaying, syncPlayerToTab]
+  );
+
+  const handleRadioStationsLoaded = useCallback(
+    (loadedStations: Track[]) => {
+      if (loadedStations.length === 0) return;
+      readyRadioPoolRef.current = loadedStations;
+      if (activeTopTabRef.current === 'radio' && engine.activePlaybackSource !== 'radio') {
+        syncPlayerToTab('radio', tabSwitchPlayingIntentRef.current || engine.isPlaying);
+      }
+    },
+    [engine.activePlaybackSource, engine.isPlaying, syncPlayerToTab]
+  );
+
   const selectFilterWithDirection = useCallback(
     (nextFilter: LibraryFilter) => {
       const prevTab = getTabForFilter(activeFilter);
       const nextTab = getTabForFilter(nextFilter);
-      if (nextTab === 'offline') {
+      if (nextTab === 'offline' && nextFilter.type !== 'synesthesia') {
         lastOfflineFilterRef.current = nextFilter;
       }
       const prevIdx = TOP_TABS.findIndex((t) => t.id === prevTab);
@@ -972,8 +1126,14 @@ export default function App() {
         setTabDirection(nextIdx > prevIdx ? 'right' : 'left');
       }
       setActiveFilter(nextFilter);
+
+      if (nextTab !== prevTab && nextFilter.type !== 'synesthesia') {
+        const shouldAutoPlay = engine.isPlaying;
+        tabSwitchPlayingIntentRef.current = shouldAutoPlay;
+        syncPlayerToTab(nextTab, shouldAutoPlay);
+      }
     },
-    [activeFilter]
+    [activeFilter, engine.isPlaying, syncPlayerToTab]
   );
 
   const selectTopTab = useCallback(
@@ -1100,7 +1260,7 @@ export default function App() {
               <Menu className="w-5 h-5" />
             </button>
             <div className="flex items-center gap-2">
-              <Disc3 className="w-5 h-5 shrink-0" style={{ color: 'var(--accent-primary)' }} />
+              <SonanceLogo3D size="sm" isPlaying={engine.isPlaying} interactive />
               <span className="font-display text-lg font-bold tracking-tight whitespace-nowrap shrink-0">
                 Sonance
               </span>
@@ -1149,8 +1309,47 @@ export default function App() {
             </div>
           </div>
 
-          {/* Zone 3: Scan Music, Theme Selector & PWA Install */}
+          {/* Zone 3: Synesthesia Studio, Scan Music, Theme Selector & PWA Install */}
           <div className="relative flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                void triggerHapticLight();
+                selectFilterWithDirection(
+                  activeFilter.type === 'synesthesia'
+                    ? lastOfflineFilterRef.current
+                    : { type: 'synesthesia' }
+                );
+              }}
+              aria-label="Open Semantic Synesthesia Studio"
+              className="sonance-press inline-flex items-center gap-1.5 min-h-[38px] px-3 py-1.5 text-xs font-semibold rounded-xl border whitespace-nowrap shrink-0 hover:opacity-85"
+              style={{
+                borderColor:
+                  activeFilter.type === 'synesthesia'
+                    ? 'var(--accent-primary)'
+                    : 'var(--border-hairline)',
+                backgroundColor:
+                  activeFilter.type === 'synesthesia'
+                    ? 'var(--accent-primary)'
+                    : 'color-mix(in srgb, var(--bg-canvas) 78%, transparent)',
+                color:
+                  activeFilter.type === 'synesthesia'
+                    ? 'var(--accent-contrast)'
+                    : 'var(--text-primary)',
+              }}
+            >
+              <Wand2
+                className="w-3.5 h-3.5 shrink-0"
+                style={{
+                  color:
+                    activeFilter.type === 'synesthesia'
+                      ? 'var(--accent-contrast)'
+                      : 'var(--accent-primary)',
+                }}
+              />
+              <span className="hidden sm:inline">Synesthesia</span>
+            </button>
+
             <button
               type="button"
               disabled={isScanningDevice}
@@ -1303,6 +1502,17 @@ export default function App() {
           className="flex-1 min-w-0 overflow-y-auto px-4 sm:px-8 py-5 sm:py-7"
         >
           <div className="mx-auto max-w-5xl space-y-7 pb-6">
+            {activeFilter.type === 'synesthesia' ? (
+              <SynesthesiaStudio
+                onPauseGlobalPlayer={() => {
+                  if (engine.isPlaying) {
+                    void engine.togglePlayPause();
+                  }
+                }}
+                onShowNotice={showNotice}
+              />
+            ) : (
+              <>
             {/* Now Playing Focal Stage */}
             <section
               className="sonance-glass rounded-3xl border p-5 sm:p-6 shadow-xs transition-colors"
@@ -1338,7 +1548,11 @@ export default function App() {
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <Music className="w-12 h-12" style={{ color: 'var(--text-muted)' }} />
+                      <SonanceLogo3D
+                        size="lg"
+                        isPlaying={engine.isPlaying}
+                        animateFloat={engine.isPlaying}
+                      />
                     )}
                   </div>
                 </button>
@@ -1613,12 +1827,14 @@ export default function App() {
                   onDislikeAndSkip={(t) => void handleDislikeAndSkip(t)}
                   onDownloadTrack={(t) => void handleDownloadTrack(t)}
                   onSuggestVisualizer={(style) => setVisualizerMode(style)}
+                  onTracksLoaded={handleOnlineTracksLoaded}
                 />
               ) : activeFilter.type === 'radiomap' ? (
                 <WorldRadioMap
                   currentTrackId={engine.currentTrackId}
                   isPlaying={engine.isPlaying}
                   onPlayStation={handlePlayExternalTrack}
+                  onStationsLoaded={handleRadioStationsLoaded}
                 />
               ) : loadingLibrary ? (
                 <StreamRowSkeleton count={4} />
@@ -1725,6 +1941,8 @@ export default function App() {
                 </div>
               )}
             </div>
+            </>
+            )}
           </div>
         </main>
       </div>
@@ -1811,6 +2029,7 @@ export default function App() {
         moodEnvironment={activeMoodEnvironment}
         synthPlan={activeSynthPlan}
         isCrossfading={engine.isCrossfading}
+        transitionBpm={engine.transitionBpm}
         analysisFrameRef={engine.analysisFrameRef}
         onTogglePlayPause={() => void engine.togglePlayPause()}
         onPrevious={engine.playPrevious}

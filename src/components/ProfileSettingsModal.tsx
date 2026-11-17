@@ -27,6 +27,7 @@ import {
 import { formatBytes } from '../utils/audioMetadata';
 import { triggerHapticLight, triggerHapticMedium } from '../utils/haptics';
 import { ListeningVibeTrends } from './ListeningVibeTrends';
+import { SonanceLogo3D } from './SonanceLogo3D';
 
 interface ProfileSettingsModalProps {
   open: boolean;
@@ -59,6 +60,14 @@ const VIS_MODES: Array<{ id: VisualizerMode; label: string }> = [
   { id: 'radial', label: 'Radial' },
   { id: 'analog', label: 'Analog' },
   { id: 'kinetic', label: 'Kinetic' },
+  { id: 'aurora', label: 'Aurora Silk' },
+  { id: 'cymatics', label: 'Cymatics' },
+  { id: 'orbit', label: 'Solar Orbit' },
+  { id: 'liquid', label: 'Liquid Mirror' },
+  { id: 'monsoon', label: 'Monsoon Ink' },
+  { id: 'dna', label: 'Helix DNA' },
+  { id: 'geometric', label: 'Geometric Flow' },
+  { id: 'glitch', label: 'Glitch Shift' },
 ];
 
 export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
@@ -154,14 +163,13 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
         >
           <div className="flex items-center gap-3 min-w-0">
             <div
-              className="w-10 h-10 rounded-2xl border flex items-center justify-center shrink-0"
+              className="w-11 h-11 rounded-2xl border flex items-center justify-center shrink-0"
               style={{
                 backgroundColor: 'var(--bg-elevated)',
                 borderColor: 'var(--border-hairline)',
-                color: 'var(--accent-primary)',
               }}
             >
-              <User className="w-5 h-5" />
+              <SonanceLogo3D size="sm" interactive />
             </div>
             <div className="min-w-0">
               <h2 className="font-display text-lg sm:text-xl font-bold tracking-tight truncate">

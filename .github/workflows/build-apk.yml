@@ -2,343 +2,87 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ main, master ]
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
   workflow_dispatch:
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+permissions:
+  contents: read
 
-      - name: Setup Node.js
+jobs:
+  build-apk:
+    name: Build Soulwave Debug APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '22'
 
-      - name: Setup Java
+      - name: Install Node dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Build web app
+        run: npm run build
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # Capacitor 8 (@capacitor/android & v8 plugins) compiles with JavaVersion.VERSION_21
+      - name: Set up Java 21 for Capacitor 8 Gradle build
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Install Dependencies & Build Web App
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Add and sync Capacitor Android
         run: |
-          npm install --legacy-peer-deps --force
-          npm install react-is tslib --legacy-peer-deps --force
-          echo "export const registerSW = () => () => {}; export const useRegisterSW = () => ({ needRefresh: [false, () => {}], offlineReady: [false, () => {}], updateServiceWorker: () => {} });" > src/pwa-mock.ts
-          printf "import { defineConfig } from 'vite';\nimport react from '@vitejs/plugin-react';\nimport tailwindcss from '@tailwindcss/vite';\nexport default defineConfig({ plugins: [react(), tailwindcss()], resolve: { alias: { 'virtual:pwa-register': '/src/pwa-mock.ts', 'virtual:pwa-register/react': '/src/pwa-mock.ts' } } });\n" > vite.config.ts
-          npm run build
-
-      - name: Setup Fresh Capacitor Android
-        run: |
-          mkdir -p backup_main
-          cp -r android/app/src/main/* backup_main/ 2>/dev/null || true
-          rm -rf android
-          npm install @capacitor/core @capacitor/cli @capacitor/android --legacy-peer-deps --force
-          if [ ! -f "capacitor.config.ts" ] && [ ! -f "capacitor.config.json" ]; then
-            npx cap init "Sonance" "com.sonance.music" --web-dir=dist
+          if [ ! -f "android/gradlew" ]; then
+            if [ -d "android/app/src" ]; then
+              mkdir -p /tmp/android-src-backup
+              cp -a android/app/src /tmp/android-src-backup/src
+              rm -rf android
+              npx cap add android
+              cp -a /tmp/android-src-backup/src/. android/app/src/
+              rm -rf /tmp/android-src-backup
+            else
+              rm -rf android
+              npx cap add android
+            fi
           fi
-          npx cap add android
-          cp -r backup_main/* android/app/src/main/ 2>/dev/null || true
-
-          STRINGS_FILE="android/app/src/main/res/values/strings.xml"
-          if [ ! -f "$STRINGS_FILE" ]; then
-            mkdir -p android/app/src/main/res/values
-            echo '<resources></resources>' > "$STRINGS_FILE"
-          fi
-          grep -q '"app_name"' "$STRINGS_FILE" || sed -i 's|</resources>|    <string name="app_name">Sonance</string>\n</resources>|g' "$STRINGS_FILE"
-          grep -q '"title_activity_main"' "$STRINGS_FILE" || sed -i 's|</resources>|    <string name="title_activity_main">Sonance</string>\n</resources>|g' "$STRINGS_FILE"
-          grep -q '"package_name"' "$STRINGS_FILE" || sed -i 's|</resources>|    <string name="package_name">com.sonance.music</string>\n</resources>|g' "$STRINGS_FILE"
-          grep -q '"custom_url_scheme"' "$STRINGS_FILE" || sed -i 's|</resources>|    <string name="custom_url_scheme">com.sonance.music</string>\n</resources>|g' "$STRINGS_FILE"
-          grep -q '"sonance_widget_description"' "$STRINGS_FILE" || sed -i 's|</resources>|    <string name="sonance_widget_description">Sonance Music Player Widget</string>\n</resources>|g' "$STRINGS_FILE"
-
-          MANIFEST_FILE="android/app/src/main/AndroidManifest.xml"
-          grep -q "READ_MEDIA_AUDIO" "$MANIFEST_FILE" || sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />|g' "$MANIFEST_FILE"
-
-          if ! grep -q "com.google.android.gms.ads.APPLICATION_ID" "$MANIFEST_FILE"; then
-            sed -i 's|</application>|    <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713"/>\n    </application>|g' "$MANIFEST_FILE"
-          fi
-
-          if ! grep -q "SonanceMediaService" "$MANIFEST_FILE"; then
-            sed -i 's|</application>|    <service android:name=".SonanceMediaService" android:exported="false" android:foregroundServiceType="mediaPlayback" />\n    </application>|g' "$MANIFEST_FILE"
-          fi
-
-          cat << 'SCRIPT_END' > gen_native.cjs
-          const fs = require("fs");
-          const path = require("path");
-
-          function findMain(dir) {
-            if (!fs.existsSync(dir)) return null;
-            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-              const full = path.join(dir, entry.name);
-              if (entry.isDirectory()) {
-                const r = findMain(full);
-                if (r) return r;
-              } else if (entry.name === "MainActivity.java") {
-                return full;
-              }
-            }
-            return null;
-          }
-
-          const mainAct = findMain("android/app/src/main/java");
-          if (!mainAct) process.exit(0);
-
-          const orig = fs.readFileSync(mainAct, "utf8");
-          const pkgLine = (orig.match(/^package\s+[^;]+;/m) || ["package com.sonance.music;"])[0];
-          const pkgDir = path.dirname(mainAct);
-
-          const serviceCode = `${pkgLine}
-
-          import android.app.Notification;
-          import android.app.NotificationChannel;
-          import android.app.NotificationManager;
-          import android.app.PendingIntent;
-          import android.app.Service;
-          import android.content.Intent;
-          import android.content.pm.ServiceInfo;
-          import android.graphics.Bitmap;
-          import android.graphics.BitmapFactory;
-          import android.media.MediaMetadata;
-          import android.media.session.MediaSession;
-          import android.media.session.PlaybackState;
-          import android.os.Build;
-          import android.os.IBinder;
-          import android.os.SystemClock;
-          import android.util.Base64;
-          import androidx.annotation.Nullable;
-
-          public class SonanceMediaService extends Service {
-              public static final String CHANNEL_ID = "sonance_playback_channel";
-              public static final int NOTIF_ID = 7071;
-              public static final String ACTION_UPDATE = "SONANCE_MEDIA_UPDATE";
-              public static final String ACTION_PREV = "SONANCE_NOTIF_PREV";
-              public static final String ACTION_PLAY_PAUSE = "SONANCE_NOTIF_PLAY_PAUSE";
-              public static final String ACTION_NEXT = "SONANCE_NOTIF_NEXT";
-
-              private MediaSession mediaSession;
-              private String currentTitle = "Sonance";
-              private String currentArtist = "Tap to play music";
-              private boolean currentPlaying = false;
-              private long currentPositionMs = 0L;
-              private long currentDurationMs = 0L;
-              private Bitmap currentArtwork = null;
-
-              @Override
-              public void onCreate() {
-                  super.onCreate();
-                  createChannel();
-                  mediaSession = new MediaSession(this, "SonanceMediaSession");
-                  mediaSession.setCallback(new MediaSession.Callback() {
-                      @Override public void onPlay() { MainActivity.dispatchJsAction("play_pause", 0L); }
-                      @Override public void onPause() { MainActivity.dispatchJsAction("play_pause", 0L); }
-                      @Override public void onSkipToNext() { MainActivity.dispatchJsAction("next", 0L); }
-                      @Override public void onSkipToPrevious() { MainActivity.dispatchJsAction("prev", 0L); }
-                      @Override public void onSeekTo(long pos) {
-                          currentPositionMs = Math.max(0L, pos);
-                          MainActivity.dispatchJsAction("seek", currentPositionMs);
-                          updateSessionAndNotification();
-                      }
-                  });
-                  mediaSession.setActive(true);
-              }
-          // PART_2_HERE
-                        @Override
-              public int onStartCommand(Intent intent, int flags, int startId) {
-                  if (intent != null && intent.getAction() != null) {
-                      String action = intent.getAction();
-                      if (ACTION_PREV.equals(action)) MainActivity.dispatchJsAction("prev", 0L);
-                      else if (ACTION_PLAY_PAUSE.equals(action)) MainActivity.dispatchJsAction("play_pause", 0L);
-                      else if (ACTION_NEXT.equals(action)) MainActivity.dispatchJsAction("next", 0L);
-                      else if (ACTION_UPDATE.equals(action)) {
-                          String title = intent.getStringExtra("title");
-                          String artist = intent.getStringExtra("artist");
-                          if (title != null && !title.isEmpty()) currentTitle = title;
-                          if (artist != null && !artist.isEmpty()) currentArtist = artist;
-                          currentPlaying = intent.getBooleanExtra("isPlaying", false);
-                          currentPositionMs = Math.max(0L, intent.getLongExtra("positionMs", 0L));
-                          currentDurationMs = Math.max(0L, intent.getLongExtra("durationMs", 0L));
-                          String artData = intent.getStringExtra("artwork");
-                          if (artData != null && artData.startsWith("data:image")) {
-                              try {
-                                  int commaIdx = artData.indexOf(",");
-                                  if (commaIdx > 0) {
-                                      byte[] decoded = Base64.decode(artData.substring(commaIdx + 1), Base64.DEFAULT);
-                                      Bitmap bmp = BitmapFactory.decodeByteArray(decoded, 0, decoded.length);
-                                      if (bmp != null) currentArtwork = bmp;
-                                  }
-                              } catch (Exception ignored) {}
-                          }
-                      }
-                  }
-                  updateSessionAndNotification();
-                  return START_STICKY;
-              }
-
-              private void updateSessionAndNotification() {
-                  MediaMetadata.Builder meta = new MediaMetadata.Builder()
-                      .putString(MediaMetadata.METADATA_KEY_TITLE, currentTitle)
-                      .putString(MediaMetadata.METADATA_KEY_ARTIST, currentArtist)
-                      .putLong(MediaMetadata.METADATA_KEY_DURATION, currentDurationMs);
-                  if (currentArtwork != null) meta.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, currentArtwork);
-                  mediaSession.setMetadata(meta.build());
-
-                  long actions = PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE | PlaybackState.ACTION_SKIP_TO_NEXT | PlaybackState.ACTION_SKIP_TO_PREVIOUS;
-                  if (currentDurationMs > 0L) actions |= PlaybackState.ACTION_SEEK_TO;
-
-                  PlaybackState state = new PlaybackState.Builder()
-                      .setActions(actions)
-                      .setState(currentPlaying ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED, currentPositionMs, currentPlaying ? 1.0f : 0.0f, SystemClock.elapsedRealtime())
-                      .build();
-                  mediaSession.setPlaybackState(state);
-
-                  Intent openIntent = new Intent(this, MainActivity.class);
-                  openIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-                  PendingIntent contentPi = PendingIntent.getActivity(this, 0, openIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-
-                  Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? new Notification.Builder(this, CHANNEL_ID) : new Notification.Builder(this);
-                  builder
-                      .setSmallIcon(android.R.drawable.ic_media_play)
-                      .setContentTitle(currentTitle)
-                      .setContentText(currentArtist)
-                      .setContentIntent(contentPi)
-                      .setOngoing(true)
-                      .setOnlyAlertOnce(true)
-                      .addAction(new Notification.Action.Builder(android.R.drawable.ic_media_previous, "Previous", buildServiceIntent(ACTION_PREV, 1)).build())
-                      .addAction(new Notification.Action.Builder(currentPlaying ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play, currentPlaying ? "Pause" : "Play", buildServiceIntent(ACTION_PLAY_PAUSE, 2)).build())
-                      .addAction(new Notification.Action.Builder(android.R.drawable.ic_media_next, "Next", buildServiceIntent(ACTION_NEXT, 3)).build())
-                      .setStyle(new Notification.MediaStyle().setMediaSession(mediaSession.getSessionToken()).setShowActionsInCompactView(0, 1, 2));
-
-                  if (currentArtwork != null) builder.setLargeIcon(currentArtwork);
-
-                  Notification notif = builder.build();
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) startForeground(NOTIF_ID, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
-                  else startForeground(NOTIF_ID, notif);
-              }
-
-              private PendingIntent buildServiceIntent(String action, int reqCode) {
-                  Intent i = new Intent(this, SonanceMediaService.class);
-                  i.setAction(action);
-                  return PendingIntent.getService(this, reqCode, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-              }
-
-              private void createChannel() {
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                      NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "Sonance Media Player", NotificationManager.IMPORTANCE_LOW);
-                      channel.setShowBadge(false);
-                      NotificationManager nm = getSystemService(NotificationManager.class);
-                      if (nm != null) nm.createNotificationChannel(channel);
-                  }
-              }
-
-              @Override
-              public void onDestroy() {
-                  if (mediaSession != null) { mediaSession.setActive(false); mediaSession.release(); }
-                  super.onDestroy();
-              }
-
-              @Nullable @Override public IBinder onBind(Intent intent) { return null; }
-          }
-          `;
-
-          const mainCode = `${pkgLine}
-
-          import android.Manifest;
-          import android.content.Intent;
-          import android.content.pm.PackageManager;
-          import android.os.Build;
-          import android.os.Bundle;
-          import android.webkit.JavascriptInterface;
-          import androidx.core.app.ActivityCompat;
-          import androidx.core.content.ContextCompat;
-          import com.getcapacitor.BridgeActivity;
-          import java.util.ArrayList;
-          import java.util.List;
-
-          public class MainActivity extends BridgeActivity {
-              private static MainActivity instance;
-
-              @Override
-              public void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  instance = this;
-                  requestRuntimePermissions();
-                  if (this.bridge != null && this.bridge.getWebView() != null) {
-                      this.bridge.getWebView().addJavascriptInterface(new MediaNotifBridge(), "SonanceMediaBridge");
-                  }
-              }
-
-              @Override
-              public void onResume() {
-                  super.onResume();
-                  startMediaService("Sonance", "Tap to play music", false, 0L, 0L, "");
-              }
-
-              @Override
-              public void onDestroy() {
-                  if (instance == this) instance = null;
-                  super.onDestroy();
-              }
-
-              public static void dispatchJsAction(String action, long value) {
-                  if (instance == null || instance.bridge == null || instance.bridge.getWebView() == null) return;
-                  final String js = "window.dispatchEvent(new CustomEvent('sonance-notif-action', { detail: { action: '" + action + "', value: " + value + " } }));";
-                  instance.runOnUiThread(() -> instance.bridge.getWebView().evaluateJavascript(js, null));
-              }
-
-              private void startMediaService(String title, String artist, boolean isPlaying, long positionMs, long durationMs, String artwork) {
-                  try {
-                      Intent serviceIntent = new Intent(MainActivity.this, SonanceMediaService.class);
-                      serviceIntent.setAction(SonanceMediaService.ACTION_UPDATE);
-                      serviceIntent.putExtra("title", title);
-                      serviceIntent.putExtra("artist", artist);
-                      serviceIntent.putExtra("isPlaying", isPlaying);
-                      serviceIntent.putExtra("positionMs", positionMs);
-                      serviceIntent.putExtra("durationMs", durationMs);
-                      serviceIntent.putExtra("artwork", artwork);
-                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(serviceIntent);
-                      else startService(serviceIntent);
-                  } catch (Exception ignored) {}
-              }
-
-              private void requestRuntimePermissions() {
-                  List<String> needed = new ArrayList<>();
-                  if (Build.VERSION.SDK_INT >= 33) {
-                      if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_AUDIO) != PackageManager.PERMISSION_GRANTED) needed.add(Manifest.permission.READ_MEDIA_AUDIO);
-                      if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) needed.add(Manifest.permission.POST_NOTIFICATIONS);
-                  } else {
-                      if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) needed.add(Manifest.permission.READ_EXTERNAL_STORAGE);
-                  }
-                  if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) needed.add(Manifest.permission.ACCESS_COARSE_LOCATION);
-                  if (!needed.isEmpty()) ActivityCompat.requestPermissions(this, needed.toArray(new String[0]), 1001);
-              }
-
-              private class MediaNotifBridge {
-                  @JavascriptInterface
-                  public void updateNotification(String title, String artist, boolean isPlaying, long positionMs, long durationMs, String artwork) {
-                      startMediaService(title, artist, isPlaying, positionMs, durationMs, artwork);
-                  }
-              }
-          }
-          `;
-
-          fs.writeFileSync(path.join(pkgDir, "SonanceMediaService.java"), serviceCode);
-          fs.writeFileSync(mainAct, mainCode);
-          SCRIPT_END
-          node gen_native.cjs
-          rm -f gen_native.cjs
           npx cap sync android
 
-      - name: Build Debug APK
-        run: |
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --console=plain
+      - name: Make Gradle wrapper executable
+        run: chmod +x android/gradlew
 
-      - name: Upload APK
+      - name: Build Debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Upload app-debug.apk artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Sonance-APK
+          name: soulwave-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
-          
+          if-no-files-found: error
+          retention-days: 30

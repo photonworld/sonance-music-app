@@ -1,4 +1,8 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="sonance_widget_description">Quick playback controls and current track info for Sonance</string>
+    <string name="app_name">Soulwave</string>
+    <string name="title_activity_main">Soulwave</string>
+    <string name="package_name">com.soulwave.music</string>
+    <string name="custom_url_scheme">com.soulwave.music</string>
+    <string name="sonance_widget_description">Quick playback controls and current track info for Soulwave</string>
 </resources>

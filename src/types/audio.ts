@@ -15,11 +15,30 @@ export type VisualizerMode =
   | 'waveform'
   | 'radial'
   | 'analog'
-  | 'kinetic';
+  | 'kinetic'
+  | 'aurora'
+  | 'cymatics'
+  | 'orbit'
+  | 'liquid'
+  | 'monsoon'
+  | 'dna'
+  | 'geometric'
+  | 'glitch';
 
 export type ConcreteVisualizerStyle = Exclude<VisualizerMode, 'auto'>;
 
-export type QuantumVisualizerMode = 'quantum' | 'neural' | 'nebula' | 'bars';
+export type QuantumVisualizerMode =
+  | 'quantum'
+  | 'neural'
+  | 'nebula'
+  | 'bars'
+  | 'cybergrid'
+  | 'vortex'
+  | 'sacred'
+  | 'lantern'
+  | 'monsoon3d'
+  | 'geometricflow'
+  | 'glitchshift';
 
 export type ThemeId =
   | 'alabaster'
@@ -192,6 +211,8 @@ export interface AudioAnalysisFrame {
   isBeat: boolean;
   spectralCentroid: number; // 0..1 normalized brightness
   estimatedBpm: number | null;
+  transitionTempoBpm?: number | null;
+  crossfadeProgress?: number | null;
 }
 
 export interface EQBand {

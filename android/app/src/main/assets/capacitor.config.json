@@ -1,0 +1,13 @@
+{
+	"appId": "com.soulwave.music",
+	"appName": "Soulwave",
+	"webDir": "dist",
+	"server": {
+		"androidScheme": "https"
+	},
+	"plugins": {
+		"AdMob": {
+			"initializeForTesting": false
+		}
+	}
+}

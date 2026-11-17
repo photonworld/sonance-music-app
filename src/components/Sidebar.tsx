@@ -12,6 +12,7 @@ import {
   Trash2,
   Upload,
   User,
+  Wand2,
   X,
 } from 'lucide-react';
 import { Playlist } from '../types/audio';
@@ -24,7 +25,8 @@ export type LibraryFilter =
   | { type: 'downloads' }
   | { type: 'playlist'; playlistId: string }
   | { type: 'discover' }
-  | { type: 'radiomap' };
+  | { type: 'radiomap' }
+  | { type: 'synesthesia' };
 
 interface SidebarProps {
   activeFilter: LibraryFilter;
@@ -213,6 +215,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
               }}
             />
             <span className="truncate">World Radio Map</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              onSelectFilter({ type: 'synesthesia' });
+              onCloseMobile();
+            }}
+            className="w-full min-h-[40px] flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors"
+            style={{
+              backgroundColor:
+                activeFilter.type === 'synesthesia' ? 'var(--bg-elevated)' : 'transparent',
+              color: 'var(--text-primary)',
+            }}
+          >
+            <Wand2
+              className="w-4 h-4 shrink-0"
+              style={{
+                color:
+                  activeFilter.type === 'synesthesia'
+                    ? 'var(--accent-primary)'
+                    : 'var(--text-muted)',
+              }}
+            />
+            <span className="truncate">Semantic Synesthesia</span>
           </button>
         </div>
 

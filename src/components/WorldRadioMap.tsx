@@ -9,6 +9,7 @@ interface WorldRadioMapProps {
   currentTrackId: string | null;
   isPlaying: boolean;
   onPlayStation: (track: Track, contextStations?: Track[]) => void;
+  onStationsLoaded?: (stations: Track[]) => void;
 }
 
 type RadioPresetId = 'world' | 'bengali' | 'bollywood' | 'lofi' | 'pop' | 'news' | 'hub';
@@ -49,6 +50,7 @@ export const WorldRadioMap: React.FC<WorldRadioMapProps> = ({
   currentTrackId,
   isPlaying,
   onPlayStation,
+  onStationsLoaded,
 }) => {
   const [stations, setStations] = useState<RadioStation[]>([]);
   const [activePreset, setActivePreset] = useState<RadioPresetId>('world');
@@ -56,6 +58,8 @@ export const WorldRadioMap: React.FC<WorldRadioMapProps> = ({
   const [selectedStation, setSelectedStation] = useState<RadioStation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const onStationsLoadedRef = React.useRef(onStationsLoaded);
+  onStationsLoadedRef.current = onStationsLoaded;
 
   const loadStations = useCallback(async (preset: RadioPresetId, countryCode: string) => {
     setLoading(true);
@@ -74,6 +78,7 @@ export const WorldRadioMap: React.FC<WorldRadioMapProps> = ({
       setStations(list);
       if (list.length > 0) {
         setSelectedStation(list[0]);
+        onStationsLoadedRef.current?.(list.map(radioToTrack));
       } else if (data.error) {
         setError(data.error);
       }

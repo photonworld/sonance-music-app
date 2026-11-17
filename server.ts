@@ -1446,6 +1446,168 @@ Return target BPM window (targetBpmMin & targetBpmMax), harmonicIntensity (0.1 t
     }
   });
 
+  // 6. Gemini AI Semantic Synesthesia & Language Visual Director
+  app.post('/api/ai/synesthesia', async (req: Request, res: Response) => {
+    const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
+    const artist = typeof req.body?.artist === 'string' ? req.body.artist.trim() : '';
+    const lyrics = typeof req.body?.lyrics === 'string' ? req.body.lyrics.trim() : '';
+    const durationSeconds =
+      Number.isFinite(Number(req.body?.durationSeconds)) && Number(req.body?.durationSeconds) > 0
+        ? Math.round(Number(req.body.durationSeconds))
+        : 210;
+    const audioFingerprint =
+      typeof req.body?.audioFingerprint === 'string' ? req.body.audioFingerprint.trim() : '';
+
+    if (!title && !lyrics) {
+      res.status(400).json({ error: 'Provide at least a song title or lyrics for semantic analysis.' });
+      return;
+    }
+
+    const ai = getGeminiClient();
+    if (!ai) {
+      res.status(503).json({
+        error: 'Gemini API key is not configured on the server. Set GEMINI_API_KEY or explore the built-in Demo Mode journeys.',
+      });
+      return;
+    }
+
+    try {
+      const prompt = `Analyze this musical piece as an elite Synesthetic Visual Director:
+Title: "${title || 'Untitled Piece'}"
+Artist: "${artist || 'Unknown Artist'}"
+Duration: ${durationSeconds} seconds
+Spectral Fingerprint Hint: ${audioFingerprint || 'balanced-harmonic'}
+Lyrics / Poetic Narrative:
+"""
+${lyrics ? lyrics.slice(0, 6000) : '(Instrumental or minimal lyrics — infer cultural & emotional atmosphere from title/artist.)'}
+"""
+
+Direct a living generative artwork evolving from intro (startRatio 0.0) to outro (endRatio 1.0):
+1. Detect the primary language ("bengali", "hindi", "english", or "other") and script ("bengali", "devanagari", "arabic", "latin", "mixed").
+2. Choose visualStylePreset tailored to its cultural & emotional universe:
+   - "bengali-monsoon": fluid watercolor washes, monsoon mist, floating organic petals, soft ink-in-water dispersion (ideal for Bengali / Rabindrasangeet / Adhunik / Folk / rain melancholy).
+   - "sufi-lantern": warm golden calligraphy particles, desert wind sand-waves, glowing lantern embers (ideal for Hindi / Urdu / Sufi / Ghazal / mystic devotion).
+   - "cosmic-neon": surrealist neon geometry, cosmic stardust, liquid chrome, Cymatic resonances (ideal for English / Western / Electronic / Indie / Cyberpunk).
+3. Produce 4 to 6 contiguous emotional storyboard phases covering 0.0 to 1.0 of the song narrative, each with distinct 4-hex palette [primaryHex, secondaryHex, accentHex, deepBgHex], visualMetaphor, gravityX (-1..1), gravityY (-1..1), turbulence (0.1..1.0), particleDensity (0.3..1.0), and kineticStyle ("smoke" for sad/soft, "spark" for energetic/chorus, "glow" for devotional/serene, "drift" for introspective).`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-4-hydrogen',
+        contents: prompt,
+        config: {
+          systemInstruction:
+            'You are a world-leading synesthesia artist and cultural musicologist. Respond strictly with valid JSON matching the requested schema, preserving authentic cultural motifs and precise hex colors.',
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              detectedLanguage: {
+                type: Type.STRING,
+                description: 'One of: bengali, hindi, english, other',
+              },
+              script: {
+                type: Type.STRING,
+                description: 'One of: bengali, devanagari, arabic, latin, mixed',
+              },
+              visualStylePreset: {
+                type: Type.STRING,
+                description: 'One of: bengali-monsoon, sufi-lantern, cosmic-neon',
+              },
+              overallEmotion: {
+                type: Type.STRING,
+                description: 'Concise 2-4 word overarching emotional tone.',
+              },
+              poeticSummary: {
+                type: Type.STRING,
+                description: 'One evocative sentence summarizing the emotional arc.',
+              },
+              culturalMotifs: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+                description: '3 to 5 visual/cultural motifs inspired by the language and lyrics.',
+              },
+              storyboard: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    startRatio: { type: Type.NUMBER, description: 'Phase start ratio 0.0 to 1.0' },
+                    endRatio: { type: Type.NUMBER, description: 'Phase end ratio 0.0 to 1.0' },
+                    phaseName: { type: Type.STRING, description: 'e.g. Intro Mist, Rising Longing, Catharsis' },
+                    emotionLabel: { type: Type.STRING, description: '1-3 word emotion name' },
+                    visualMetaphor: {
+                      type: Type.STRING,
+                      description: 'Short poetic visual directive for particles and shaders.',
+                    },
+                    palette: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING },
+                      description: 'Exactly 4 CSS hex colors: [primary, secondary, accent, deepBackground]',
+                    },
+                    gravityX: { type: Type.NUMBER, description: 'Horizontal particle drift -1.0 to 1.0' },
+                    gravityY: { type: Type.NUMBER, description: 'Vertical gravity force -1.0 (rise) to 1.0 (fall)' },
+                    turbulence: { type: Type.NUMBER, description: 'Curl noise turbulence intensity 0.1 to 1.0' },
+                    particleDensity: { type: Type.NUMBER, description: 'Normalized particle density 0.3 to 1.0' },
+                    kineticStyle: {
+                      type: Type.STRING,
+                      description: 'One of: smoke, spark, glow, drift',
+                    },
+                  },
+                  required: [
+                    'startRatio',
+                    'endRatio',
+                    'phaseName',
+                    'emotionLabel',
+                    'visualMetaphor',
+                    'palette',
+                    'gravityX',
+                    'gravityY',
+                    'turbulence',
+                    'particleDensity',
+                    'kineticStyle',
+                  ],
+                },
+              },
+            },
+            required: [
+              'detectedLanguage',
+              'script',
+              'visualStylePreset',
+              'overallEmotion',
+              'poeticSummary',
+              'culturalMotifs',
+              'storyboard',
+            ],
+          },
+        },
+      });
+
+      const parsed = JSON.parse((response.text ?? '{}').trim()) as Record<string, unknown>;
+      res.json({
+        ...parsed,
+        songTitle: title || 'Untitled Piece',
+        artist: artist || 'Independent Artist',
+        durationSeconds,
+        source: 'gemini',
+      });
+    } catch (err) {
+      let msg = err instanceof Error ? err.message : 'Semantic synesthesia analysis failed';
+      let status = 502;
+      try {
+        const maybeJson = JSON.parse(msg) as { error?: { code?: number; message?: string } };
+        if (maybeJson?.error?.message) {
+          msg = maybeJson.error.message;
+        }
+        if (typeof maybeJson?.error?.code === 'number' && maybeJson.error.code >= 400) {
+          status = maybeJson.error.code;
+        }
+      } catch {
+        // use raw Error.message
+      }
+      console.error('Gemini synesthesia error:', err);
+      res.status(status).json({ error: msg });
+    }
+  });
+
   const httpServer = http.createServer(app);
 
   // Mount Vite middlewares in dev or serve built SPA in production

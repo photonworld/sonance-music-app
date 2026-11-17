@@ -56,9 +56,9 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.ankit.sonance.widget.ACTION_PLAY_PAUSE" />
-                <action android:name="com.ankit.sonance.widget.ACTION_NEXT" />
-                <action android:name="com.ankit.sonance.widget.ACTION_PREV" />
+                <action android:name="com.soulwave.music.widget.ACTION_PLAY_PAUSE" />
+                <action android:name="com.soulwave.music.widget.ACTION_NEXT" />
+                <action android:name="com.soulwave.music.widget.ACTION_PREV" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
